@@ -1,48 +1,72 @@
-#include <iostream>
 #include <cstring>
 #include <cmath>
 #include <sys/ioctl.h>
 #include <vector>
 #include <chrono>
-#include <array>
 #include <thread>
 #include <cassert>
+#include <unistd.h>
+#include <atomic>
+#include <mutex>
+
 using namespace std::chrono_literals;
+
+constexpr double char_ratio = 0.5;
+constexpr uint32_t sim_size = 100;
+constexpr double G = 0.01;
+constexpr double size = 0.3;
+constexpr double dt = 0.01;
+constexpr double stiffness = .01;
+constexpr double initial_velocity_multiplier = 0.02;
+constexpr size_t num_particles = 10000;
+constexpr size_t max_particles_per_cell = 64;
+constexpr double wall_collision_velocity = 0.5;
+constexpr double collision_factor = -0.3;
+constexpr int fps = 50;
+
+uint32_t screen_width,
+	screen_height;
+double ratio;
+double sim_width, sim_height;
+std::vector<char> screen;
+std::atomic_bool present = false;
+std::condition_variable cv;
+std::mutex m;
 
 struct vec2
 {
-    float x = 0, y = 0;
+	double x = 0, y = 0;
 };
 
 vec2 operator+(const vec2 &a, const vec2 &b)
 {
-    return {a.x + b.x, a.y + b.y};
+	return {a.x + b.x, a.y + b.y};
 }
 
 vec2 operator-(const vec2 &a, const vec2 &b)
 {
-    return {a.x - b.x, a.y - b.y};
+	return {a.x - b.x, a.y - b.y};
 }
 
-float operator*(vec2 a, vec2 b)
+double operator*(vec2 a, vec2 b)
 {
-    return a.x * b.x + a.y * b.y;
+	return a.x * b.x + a.y * b.y;
 }
 
-vec2 operator*(vec2 a, float v)
+vec2 operator*(vec2 a, double v)
 {
 	return {a.x * v, a.y * v};
 }
 
-vec2 operator/(vec2 a, float v)
+vec2 operator/(vec2 a, double v)
 {
 	return {a.x / v, a.y / v};
 }
 
 struct particle
 {
-    vec2 pos;
-    vec2 v;
+	vec2 pos;
+	vec2 v;
 	vec2 a;
 };
 
@@ -58,26 +82,28 @@ struct rect
 
 		return p.x > pos.x &&
 			   p.y > pos.y &&
-		       p.x <= pos.x + size.x &&
+			   p.x <= pos.x + size.x &&
 			   p.y <= pos.y + size.y;
 	}
 };
 
 struct cell
 {
-	static const size_t m_max_particles = 4;
+	static const size_t m_max_particles = max_particles_per_cell;
+	static const uint8_t m_num_children = 4;
 
 	std::vector<particle> m_particles;
 	cell *const m_parent = nullptr;
 	std::vector<cell> m_children;
 	const rect m_rect;
-	uint32_t m_num_particles = 0;
-	vec2 center_of_mass;
+	size_t m_num_particles = 0;
+	vec2 m_center_of_mass;
+	vec2 m_a;
 
 	cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
 	{
 		m_particles.reserve(m_max_particles + 1);
-		m_children.reserve(4);
+		m_children.reserve(m_num_children);
 	}
 
 	void subdivide()
@@ -85,7 +111,7 @@ struct cell
 		static int i = 0;
 		i++;
 		assert(m_children.empty());
-		const vec2 cell_size = m_rect.size * 0.5f;
+		const vec2 cell_size = m_rect.size * 0.5;
 		const vec2 middle_point = m_rect.pos + cell_size;
 
 		m_children.emplace_back(this, rect{m_rect.pos, cell_size});
@@ -106,7 +132,7 @@ struct cell
 	{
 		for (cell &child : m_children)
 		{
-			if(!child.m_children.empty())
+			if (!child.m_children.empty())
 			{
 				child.unsubdivide();
 			}
@@ -120,22 +146,22 @@ struct cell
 	{
 		++m_num_particles;
 
-		if(m_children.empty())
+		if (m_children.empty())
 		{
 			m_particles.push_back(p);
-			if(m_particles.size() > m_max_particles)
+			if (m_particles.size() > m_max_particles)
 			{
 				subdivide();
 			}
 		}
 		else
 		{
-			const vec2 cell_size = m_rect.size * 0.5f;
+			const vec2 cell_size = m_rect.size * 0.5;
 			const vec2 middle_point = m_rect.pos + cell_size;
 
-			if(p.pos.y <= middle_point.y)
+			if (p.pos.y <= middle_point.y)
 			{
-				if(p.pos.x <= middle_point.x)
+				if (p.pos.x <= middle_point.x)
 				{
 					m_children[0].add(p);
 				}
@@ -146,7 +172,7 @@ struct cell
 			}
 			else
 			{
-				if(p.pos.x <= middle_point.x)
+				if (p.pos.x <= middle_point.x)
 				{
 					m_children[2].add(p);
 				}
@@ -160,7 +186,7 @@ struct cell
 
 	void propagate_particles_up()
 	{
-		if(!m_children.empty())
+		if (!m_children.empty())
 		{
 			for (cell &child : m_children)
 			{
@@ -168,15 +194,15 @@ struct cell
 			}
 		}
 
-		if(m_parent != nullptr)
+		if (m_parent != nullptr)
 		{
 			std::vector<particle> new_particles;
-			new_particles.reserve(m_max_particles);
+			new_particles.reserve(m_max_particles + 1);
 			size_t num_removed = 0;
 
 			for (particle &p : m_particles)
 			{
-				if(m_rect.is_inside(p.pos))
+				if (m_rect.is_inside(p.pos))
 				{
 					new_particles.push_back(p);
 				}
@@ -194,9 +220,9 @@ struct cell
 
 	void propagate_particles_down()
 	{
-		if(!m_children.empty())
+		if (!m_children.empty())
 		{
-			if(m_num_particles <= m_max_particles)
+			if (m_num_particles <= m_max_particles)
 			{
 				unsubdivide();
 			}
@@ -217,38 +243,175 @@ struct cell
 		}
 	}
 
-	void update()
+	void progress()
 	{
+		calculate_physics();
 		propagate_particles_up();
 		propagate_particles_down();
 	}
+
+	static void cell_pair_interaction(cell &a, cell &b)
+	{
+		const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
+		const double distance = sqrt(ab * ab);
+		if (!isnormal(distance))
+		{
+			return;
+		}
+
+		const vec2 unit_vec = ab / distance;
+
+		double g;
+		if (distance < size)
+		{
+			g = 0;
+		}
+		else
+		{
+			g = G / (distance * distance);
+		}
+
+		a.m_a = a.m_a + unit_vec * (g * b.m_num_particles);
+		b.m_a = b.m_a - unit_vec * (g * a.m_num_particles);
+	}
+
+	static void particle_pair_interaction(particle &a, particle &b)
+	{
+		const vec2 ab = b.pos - a.pos;
+		const double distance = sqrt(ab * ab);
+		if (!isnormal(distance))
+		{
+			return;
+		}
+
+		const vec2 unit_vec = ab / distance;
+
+		double f;
+
+		/* Collision */
+		if (distance < size)
+		{
+			f = -stiffness;
+			const double relative_v = (b.v - a.v) * unit_vec;
+			if (relative_v > 0)
+			{
+				f *= collision_factor;
+			}
+		}
+		else
+		{
+			f = G / (distance * distance);
+		}
+
+		/* Assume that mass is equal to 1 */
+		a.a = a.a + unit_vec * f;
+		b.a = b.a - unit_vec * f;
+	}
+
+	static void simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
+	{
+		const vec2 r_vec = p.pos - wall_pos;
+		const double distance = r_vec * wall_normal;
+		if (distance < size * 0.5)
+		{
+			if (distance < 0)
+			{
+				p.pos = p.pos - wall_normal * distance;
+			}
+
+			const double projected_v = p.v * wall_normal;
+			if (projected_v < 0)
+			{
+				p.v = p.v - wall_normal * projected_v * (1.0 + wall_collision_velocity);
+			}
+		}
+	}
+
+	void find_leafs(std::vector<cell *> &cells)
+	{
+		if (!m_children.empty())
+		{
+			for (cell &child : m_children)
+			{
+				child.find_leafs(cells);
+			}
+		}
+		else
+		{
+			if (m_num_particles > 0)
+			{
+				cells.push_back(this);
+			}
+		}
+	}
+
+	void calculate_physics()
+	{
+		std::vector<cell *> leafs;
+		leafs.reserve(m_num_particles / m_max_particles * 2);
+		find_leafs(leafs);
+
+		/* Center of mass */
+		for (cell *leaf : leafs)
+		{
+			cell &l = *leaf;
+
+			l.m_center_of_mass = vec2();
+			for (const particle &p : l.m_particles)
+			{
+				l.m_center_of_mass = l.m_center_of_mass + p.pos;
+			};
+			l.m_center_of_mass = l.m_center_of_mass / l.m_num_particles;
+		}
+
+		for (size_t i = 0; i < leafs.size(); i++)
+		{
+			cell &c1 = *leafs[i];
+
+			for (size_t j = i + 1; j < leafs.size(); j++)
+			{
+				cell &c2 = *leafs[j];
+				cell_pair_interaction(c1, c2);
+			}
+
+			for (size_t k = 0; k < c1.m_num_particles; k++)
+			{
+				particle &p1 = c1.m_particles[k];
+				for (size_t l = k + 1; l < c1.m_num_particles; l++)
+				{
+					particle &p2 = c1.m_particles[l];
+					particle_pair_interaction(p1, p2);
+				}
+				p1.a = p1.a + c1.m_a;
+
+				p1.pos = p1.pos + p1.v * dt + p1.a * dt * dt * 0.5;
+				p1.v = p1.v + p1.a * dt;
+
+				simple_wall(p1, {0, 0}, {1, 0});
+				simple_wall(p1, {0, 0}, {0, 1});
+				simple_wall(p1, {sim_width, sim_height}, {-1, 0});
+				simple_wall(p1, {sim_width, sim_height}, {0, -1});
+
+				p1.a = vec2();
+			}
+
+			c1.m_a = vec2();
+		}
+	}
 };
-
-uint32_t screen_width, screen_height;
-float ratio;
-float sim_width, sim_height;
-std::vector<char> screen;
-
-constexpr float char_ratio = 0.35f;
-constexpr uint32_t sim_size = 30;
-constexpr float G = 0.01f;
-constexpr float size = 0.3f;
-constexpr float dt = 0.1f;
-constexpr float stiffness = 0.1f;
-constexpr float elastic_collision_factor = 0.9f;
-constexpr float wall_collision_energy_dissipation = 0.01f;
-constexpr uint32_t sim_draw_ratio = 100;
-constexpr float initial_velocity_multiplier = 0.1f;
-
-constexpr uint32_t num_particles = 100;
-//std::array<particle, num_particles> particles;
 
 void init()
 {
 	struct winsize w;
-    ioctl(1, TIOCGWINSZ, &w);
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 	screen_width = w.ws_col;
 	screen_height = w.ws_row;
+	if (screen_width == 0 || screen_height == 0)
+	{
+		screen_width = 100;
+		screen_height = 50;
+	}
+
 	ratio = screen_width * char_ratio / screen_height;
 	sim_width = sim_size * ratio;
 	sim_height = sim_size;
@@ -259,78 +422,10 @@ void clear_screen()
 {
 	screen.assign((screen_width + 1) * screen_height, ' ');
 	for (uint32_t i = 0; i < screen_height; i++)
-    {
-        screen[(screen_width+1)*i + screen_width] = '\n';
-    }
-    screen[(screen_width + 1) * screen_height] = '\0';
-}
-
-void wall(particle &p, vec2 wall_pos, vec2 wall_normal)
-{
-	const vec2 r_vec = p.pos - wall_pos;
-	const float distance = r_vec * wall_normal;
-	if(distance < size * 0.5f)
 	{
-		float collision = stiffness * size / (distance * distance);
-		if (p.v * wall_normal > 0)
-		{
-			collision *= 1.f - wall_collision_energy_dissipation;
-		}
-		p.a = p.a + wall_normal * collision;
+		screen[(screen_width + 1) * i + screen_width] = '\n';
 	}
-}
-
-void force(particle &a, particle &b)
-{
-	const vec2 ab = b.pos - a.pos;
-	const float distance = sqrtf(ab * ab);
-	const vec2 unit_vec = ab / distance;
-
-	float f = 0;
-	const float g = G / (distance * distance);
-	f += g;
-
-	/* Collision */
-	if(distance < size)
-	{
-		float collision = stiffness * size * 2.f / (distance * distance);
-		if ((b.v - a.v) * unit_vec > 0)
-		{
-			collision *= elastic_collision_factor;
-		}
-		f -= collision;
-	}
-
-	/*Assume that mass is equal to 1 */
-	a.a = a.a + unit_vec * f;
-	b.a = b.a - unit_vec * f;
-}
-
-// void simulate()
-// {
-// 	for (uint32_t i = 0; i < num_particles; i++)
-// 	{
-// 		particle &a = particles[i];
-// 		for (uint32_t j = i + 1; j < num_particles; j++)
-// 		{
-// 			particle &b = particles[j];
-// 			force(a, b);
-// 		}
-
-// 		wall(a, {0, 0}, {1, 0});
-// 		wall(a, {0, 0}, {0, 1});
-// 		wall(a, {sim_width, sim_height}, {-1, 0});
-// 		wall(a, {sim_width, sim_height}, {0, -1});
-
-// 		a.pos = a.pos + a.v * dt + a.a * dt * dt * 0.5f;
-// 		a.v = a.v + a.a * dt;
-// 		a.a = {0, 0};
-// 	}
-// }
-
-void calculate_forces(const cell &quad_tree)
-{
-
+	screen[(screen_width + 1) * screen_height] = '\0';
 }
 
 void draw_recursive(const cell &quad_tree)
@@ -359,55 +454,44 @@ void draw_recursive(const cell &quad_tree)
 void draw_quad_tree(const cell &quad_tree)
 {
 	clear_screen();
-	draw_recursive(quad_tree);
+
+	{
+		present = true;
+		std::lock_guard lock(m);
+		draw_recursive(quad_tree);
+		present = false;
+	}
+	cv.notify_one();
+
 	printf("%s", screen.data());
 }
 
 void generate_particles(cell &quad_tree)
 {
-	for (uint32_t i = 0; i < num_particles; ++i)
+	for (size_t i = 0; i < num_particles; ++i)
 	{
 		particle p;
-		p.pos = {(float)rand() / RAND_MAX * sim_width, (float)rand() / RAND_MAX * sim_height};
-		p.v = p.pos - vec2{sim_width, sim_height} * 0.5f;
+		p.pos = {(double)rand() / RAND_MAX * sim_width, (double)rand() / RAND_MAX * sim_height};
+		p.pos = p.pos - vec2{sim_width, sim_height} * 0.5;
+		p.pos = p.pos * 0.8;
+		p.pos = p.pos + vec2{sim_width, sim_height} * 0.5;
+		p.v = p.pos - vec2{sim_width, sim_height} * 0.5;
 		p.v = vec2{p.v.y, -p.v.x} * initial_velocity_multiplier;
 		quad_tree.add(p);
 	}
 }
 
-void simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
+void work(cell *quad_tree)
 {
-	const vec2 r_vec = p.pos - wall_pos;
-	const float distance = r_vec * wall_normal;
-	if(distance < size * 0.5f)
+	std::unique_lock lock(m);
+	while (true)
 	{
-		const float projected_v = p.v * wall_normal;
-		if (projected_v < 0)
-		{
-			p.v = p.v - wall_normal * projected_v * 2;
-		}
-	}
-}
+		cv.wait(lock, []{ return !present;});
+		//auto t1 = std::chrono::steady_clock::now();
+		quad_tree->progress();
+		//auto time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1);
 
-void simulate(cell &quad_tree)
-{
-	if(quad_tree.m_children.empty())
-	{
-		for(particle &p : quad_tree.m_particles)
-		{
-			simple_wall(p, {0, 0}, {1, 0});
-			simple_wall(p, {0, 0}, {0, 1});
-			simple_wall(p, {sim_width, sim_height}, {-1, 0});
-			simple_wall(p, {sim_width, sim_height}, {0, -1});
-			p.pos = p.pos + p.v * dt + p.a * dt * dt * 0.5f;
-		}
-	}
-	else
-	{
-		for(cell &child : quad_tree.m_children)
-		{
-			simulate(child);
-		}
+		//printf("time: %fs\n", time.count());
 	}
 }
 
@@ -419,12 +503,17 @@ int main()
 
 	generate_particles(quad_tree);
 
-	while(true)
+	std::thread worker(work, &quad_tree);
+
+	while (true)
 	{
-		simulate(quad_tree);
+		const auto t1 = std::chrono::steady_clock::now();
 		draw_quad_tree(quad_tree);
-		std::this_thread::sleep_for(50ms);
-		quad_tree.update();
+		const auto draw_time = std::chrono::steady_clock::now() - t1;
+
+		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
+
+		std::this_thread::sleep_for(sleep_duration);
 	}
 	return 0;
 }
