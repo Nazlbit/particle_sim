@@ -4,3 +4,5 @@ project(particles VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(particles main.cpp)
+
+target_link_libraries(particles pthread)

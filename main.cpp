@@ -12,17 +12,18 @@
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.5;
-constexpr uint32_t sim_size = 100;
+constexpr uint32_t sim_size = 60;
 constexpr double G = 0.01;
 constexpr double size = 0.3;
-constexpr double dt = 0.01;
-constexpr double stiffness = .01;
-constexpr double initial_velocity_multiplier = 0.02;
-constexpr size_t num_particles = 10000;
-constexpr size_t max_particles_per_cell = 64;
+constexpr double dt = 0.003;
+constexpr double collision_force_approach = -0.02;
+constexpr double collision_force_leave = -0.01;
+constexpr double initial_velocity_multiplier = 0.04;
+constexpr size_t num_particles = 8000;
+constexpr size_t max_particles_per_cell = 32;
 constexpr double wall_collision_velocity = 0.5;
-constexpr double collision_factor = -0.3;
-constexpr int fps = 50;
+constexpr int fps = 25;
+constexpr double surrounding_cells_distance_multiplier = 2;
 
 uint32_t screen_width,
 	screen_height;
@@ -99,6 +100,7 @@ struct cell
 	size_t m_num_particles = 0;
 	vec2 m_center_of_mass;
 	vec2 m_a;
+	std::vector<cell *> m_surrounding_cells;
 
 	cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
 	{
@@ -253,9 +255,16 @@ struct cell
 	static void cell_pair_interaction(cell &a, cell &b)
 	{
 		const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
-		const double distance = sqrt(ab * ab);
-		if (!isnormal(distance))
+		const double distance_squared = ab * ab;
+		const double distance = sqrt(distance_squared);
+		if (!std::isnormal(distance))
 		{
+			return;
+		}
+
+		if (distance_squared < a.m_rect.size.x * a.m_rect.size.y * surrounding_cells_distance_multiplier)
+		{
+			a.m_surrounding_cells.push_back(&b);
 			return;
 		}
 
@@ -268,7 +277,7 @@ struct cell
 		}
 		else
 		{
-			g = G / (distance * distance);
+			g = G / distance_squared;
 		}
 
 		a.m_a = a.m_a + unit_vec * (g * b.m_num_particles);
@@ -278,7 +287,8 @@ struct cell
 	static void particle_pair_interaction(particle &a, particle &b)
 	{
 		const vec2 ab = b.pos - a.pos;
-		const double distance = sqrt(ab * ab);
+		const double distance_squared = ab * ab;
+		const double distance = sqrt(distance_squared);
 		if (!isnormal(distance))
 		{
 			return;
@@ -291,16 +301,19 @@ struct cell
 		/* Collision */
 		if (distance < size)
 		{
-			f = -stiffness;
 			const double relative_v = (b.v - a.v) * unit_vec;
 			if (relative_v > 0)
 			{
-				f *= collision_factor;
+				f = collision_force_leave;
+			}
+			else
+			{
+				f = collision_force_approach;
 			}
 		}
 		else
 		{
-			f = G / (distance * distance);
+			f = G / distance_squared;
 		}
 
 		/* Assume that mass is equal to 1 */
@@ -349,6 +362,7 @@ struct cell
 	{
 		std::vector<cell *> leafs;
 		leafs.reserve(m_num_particles / m_max_particles * 2);
+
 		find_leafs(leafs);
 
 		/* Center of mass */
@@ -382,6 +396,16 @@ struct cell
 					particle &p2 = c1.m_particles[l];
 					particle_pair_interaction(p1, p2);
 				}
+
+				for(cell *const c : c1.m_surrounding_cells)
+				{
+					cell &c2 = *c;
+					for(particle &p2 : c2.m_particles)
+					{
+						particle_pair_interaction(p1, p2);
+					}
+
+				}
 				p1.a = p1.a + c1.m_a;
 
 				p1.pos = p1.pos + p1.v * dt + p1.a * dt * dt * 0.5;
@@ -396,6 +420,7 @@ struct cell
 			}
 
 			c1.m_a = vec2();
+			c1.m_surrounding_cells.clear();
 		}
 	}
 };
@@ -462,7 +487,7 @@ void draw_quad_tree(const cell &quad_tree)
 		present = false;
 	}
 	cv.notify_one();
-
+	system("clear");
 	printf("%s", screen.data());
 }
 
@@ -515,5 +540,7 @@ int main()
 
 		std::this_thread::sleep_for(sleep_duration);
 	}
+
+	worker.join();
 	return 0;
 }
