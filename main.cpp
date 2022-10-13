@@ -12,21 +12,22 @@
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.5;
-constexpr uint32_t sim_size = 60;
-constexpr double G = 0.01;
-constexpr double size = 0.3;
-constexpr double dt = 0.003;
-constexpr double collision_force_approach = -0.02;
-constexpr double collision_force_leave = -0.01;
-constexpr double initial_velocity_multiplier = 0.04;
+constexpr double sim_size = 120.;
+constexpr double G = 0.02;
+constexpr double diameter = 1.;
+constexpr double dt = 0.01;
+constexpr double viscosity = 0.02;
+constexpr double collision_max_force = 100.0;
+constexpr double collision_inner_diameter_ratio = 0.5;
+constexpr double initial_velocity_factor = 0.07;
 constexpr size_t num_particles = 8000;
 constexpr size_t max_particles_per_cell = 32;
-constexpr double wall_collision_velocity = 0.5;
-constexpr int fps = 25;
-constexpr double surrounding_cells_distance_multiplier = 2;
+constexpr double wall_collision_velocity = 0.;
+constexpr double surrounding_cells_distance_multiplier = 2.;
+constexpr double generation_scale = 0.5;
+constexpr int fps = 20;
 
-uint32_t screen_width,
-	screen_height;
+uint32_t screen_width, screen_height;
 double ratio;
 double sim_width, sim_height;
 std::vector<char> screen;
@@ -256,26 +257,26 @@ struct cell
 	{
 		const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
 		const double distance_squared = ab * ab;
-		const double distance = sqrt(distance_squared);
-		if (!std::isnormal(distance))
+		if (!std::isnormal(distance_squared)) [[unlikely]]
 		{
 			return;
 		}
 
-		if (distance_squared < a.m_rect.size.x * a.m_rect.size.y * surrounding_cells_distance_multiplier)
+		if (distance_squared < sqrt(a.m_rect.size.x * a.m_rect.size.y * b.m_rect.size.x * b.m_rect.size.y) * surrounding_cells_distance_multiplier) 
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
 		}
 
+		const double distance = sqrt(distance_squared);
 		const vec2 unit_vec = ab / distance;
 
 		double g;
-		if (distance < size)
+		if (distance < diameter) 
 		{
 			g = 0;
 		}
-		else
+		else 
 		{
 			g = G / distance_squared;
 		}
@@ -288,32 +289,36 @@ struct cell
 	{
 		const vec2 ab = b.pos - a.pos;
 		const double distance_squared = ab * ab;
-		const double distance = sqrt(distance_squared);
-		if (!isnormal(distance))
+		if (!std::isnormal(distance_squared)) [[unlikely]]
 		{
 			return;
 		}
 
+		const double distance = sqrt(distance_squared);
 		const vec2 unit_vec = ab / distance;
 
 		double f;
 
-		/* Collision */
-		if (distance < size)
+		constexpr double inner_diameter = diameter * collision_inner_diameter_ratio;
+		if (distance < inner_diameter)
 		{
-			const double relative_v = (b.v - a.v) * unit_vec;
-			if (relative_v > 0)
-			{
-				f = collision_force_leave;
-			}
-			else
-			{
-				f = collision_force_approach;
-			}
+			/* Collision */
+			constexpr double inner_diameter_squared = inner_diameter * inner_diameter;
+			constexpr double q = 1. / collision_max_force;
+			f = -inner_diameter_squared * (1 + q) / (distance_squared + inner_diameter_squared * q) + 1;
 		}
 		else
 		{
+			/* Gravity */
 			f = G / distance_squared;
+		}
+
+		if (distance < diameter)
+		{
+			/* Viscosity */
+			const double relative_v = (b.v - a.v) * unit_vec;
+			const double viscosity_f = viscosity * relative_v;
+			f += viscosity_f;
 		}
 
 		/* Assume that mass is equal to 1 */
@@ -325,11 +330,11 @@ struct cell
 	{
 		const vec2 r_vec = p.pos - wall_pos;
 		const double distance = r_vec * wall_normal;
-		if (distance < size * 0.5)
+		if (distance < diameter * 0.5) [[unlikely]]
 		{
 			if (distance < 0)
 			{
-				p.pos = p.pos - wall_normal * distance;
+				p.pos = p.pos - wall_normal * distance * 1.001;
 			}
 
 			const double projected_v = p.v * wall_normal;
@@ -463,7 +468,7 @@ void draw_recursive(const cell &quad_tree)
 			int y = p.pos.y / sim_height * screen_height;
 			if (x >= 0 && x < screen_width && y >= 0 && y < screen_height)
 			{
-				screen[(screen_width + 1) * y + x] = '+';
+				screen[(screen_width + 1) * y + x] = '#';
 			}
 		}
 	}
@@ -498,10 +503,11 @@ void generate_particles(cell &quad_tree)
 		particle p;
 		p.pos = {(double)rand() / RAND_MAX * sim_width, (double)rand() / RAND_MAX * sim_height};
 		p.pos = p.pos - vec2{sim_width, sim_height} * 0.5;
-		p.pos = p.pos * 0.8;
+		p.pos = p.pos * generation_scale;
 		p.pos = p.pos + vec2{sim_width, sim_height} * 0.5;
+		//p.pos.y = 5;
 		p.v = p.pos - vec2{sim_width, sim_height} * 0.5;
-		p.v = vec2{p.v.y, -p.v.x} * initial_velocity_multiplier;
+		p.v = vec2{p.v.y, -p.v.x} * initial_velocity_factor;
 		quad_tree.add(p);
 	}
 }
