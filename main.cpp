@@ -13,28 +13,25 @@
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.5;
-constexpr double sim_size = 80.;
+constexpr double sim_size = 200.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
-constexpr double viscosity = 0.02;
+constexpr double drag_factor = 0.03;
 constexpr double collision_max_force = 50.0;
 constexpr double collision_inner_diameter_ratio = 0.5;
-constexpr double initial_velocity_factor = 0.07;
-constexpr size_t num_particles = 4000;
-constexpr size_t max_particles_per_cell = 20;
+constexpr double initial_velocity_factor = 0.05;
+constexpr size_t num_particles = 20000;
+constexpr size_t max_particles_per_cell = 32;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
-constexpr int fps = 15;
+constexpr int fps = 20;
 
 uint32_t screen_width, screen_height;
 double ratio;
 double sim_width, sim_height;
 std::vector<char> screen;
-std::atomic_bool present = false;
-std::condition_variable cv;
-std::mutex m;
 
 struct vec2
 {
@@ -95,14 +92,18 @@ struct cell
 	static const size_t m_max_particles = max_particles_per_cell;
 	static const uint8_t m_num_children = 4;
 
-	std::vector<particle> m_particles;
 	cell *const m_parent = nullptr;
-	std::vector<cell> m_children;
 	const rect m_rect;
+
+	std::vector<particle> m_particles;
+	std::vector<cell> m_children;
 	size_t m_num_particles = 0;
 	vec2 m_center_of_mass = {};
 	vec2 m_a = {};
 	std::vector<cell *> m_surrounding_cells;
+	static std::mutex m_mutex;
+	static std::vector<particle> m_all_particles;
+	static std::vector<particle> m_all_particles_tmp;
 
 	cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
 	{
@@ -188,13 +189,14 @@ struct cell
 		}
 	}
 
-	void propagate_particles_up(std::vector<particle> &temp_particles)
+	void propagate_particles_up()
 	{
+		static std::vector<particle> temp_particles;
 		if (!m_children.empty())
 		{
 			for (cell &child : m_children)
 			{
-				child.propagate_particles_up(temp_particles);
+				child.propagate_particles_up();
 			}
 		}
 
@@ -247,10 +249,16 @@ struct cell
 	void progress()
 	{
 		calculate_physics();
-		std::vector<particle> temp_particles;
-		temp_particles.reserve(m_max_particles + 1);
-		propagate_particles_up(temp_particles);
+
+		propagate_particles_up();
 		propagate_particles_down();
+
+		m_all_particles_tmp.clear();
+		find_particles(m_all_particles_tmp);
+		{
+			std::lock_guard lock(m_mutex);
+			m_all_particles.swap(m_all_particles_tmp);
+		}
 	}
 
 	static void cell_pair_interaction(cell &a, cell &b)
@@ -315,10 +323,10 @@ struct cell
 
 		if (distance < diameter)
 		{
-			/* Viscosity */
+			/* Drag */
 			const double relative_v = (b.v - a.v) * unit_vec;
-			const double viscosity_f = viscosity * relative_v;
-			f += viscosity_f;
+			const double drag_f = drag_factor * relative_v * abs(relative_v);
+			f += drag_f;
 		}
 
 		/* Assume that mass is equal to 1 */
@@ -428,7 +436,32 @@ struct cell
 			c1.m_surrounding_cells.clear();
 		}
 	}
+
+	void find_particles(std::vector<particle> &particles) const
+	{
+		if (!m_children.empty())
+		{
+			for (const cell &child : m_children)
+			{
+				child.find_particles(particles);
+			}
+		}
+		else
+		{
+			particles.insert(particles.end(), m_particles.begin(), m_particles.end());
+		}
+	}
+
+	static std::vector<particle> get_particles()
+	{
+		std::lock_guard lock(m_mutex);
+		return m_all_particles;
+	}
 };
+
+std::mutex cell::m_mutex;
+std::vector<particle> cell::m_all_particles;
+std::vector<particle> cell::m_all_particles_tmp;
 
 void init()
 {
@@ -458,40 +491,19 @@ void clear_screen()
 	screen[(screen_width + 1) * screen_height] = '\0';
 }
 
-void draw_recursive(const cell &quad_tree)
-{
-	if (quad_tree.m_children.empty())
-	{
-		for (const particle &p : quad_tree.m_particles)
-		{
-			int x = p.pos.x / sim_width * screen_width;
-			int y = p.pos.y / sim_height * screen_height;
-			if (x >= 0 && x < screen_width && y >= 0 && y < screen_height)
-			{
-				screen[(screen_width + 1) * y + x] = '#';
-			}
-		}
-	}
-	else
-	{
-		for (const cell &child : quad_tree.m_children)
-		{
-			draw_recursive(child);
-		}
-	}
-}
-
 void draw_quad_tree(const cell &quad_tree)
 {
 	clear_screen();
-
+	for (const particle &p : quad_tree.get_particles())
 	{
-		present = true;
-		std::lock_guard lock(m);
-		draw_recursive(quad_tree);
-		present = false;
+		int x = p.pos.x / sim_width * screen_width;
+		int y = p.pos.y / sim_height * screen_height;
+		if (x >= 0 && x < screen_width && y >= 0 && y < screen_height)
+		{
+			screen[(screen_width + 1) * y + x] = '#';
+		}
 	}
-	cv.notify_one();
+
 	system("clear");
 	printf("%s", screen.data());
 }
@@ -514,25 +526,18 @@ void generate_particles(cell &quad_tree)
 
 void work(cell *quad_tree)
 {
-	std::unique_lock lock(m);
-	// const auto t1 = std::chrono::steady_clock::now();
+	//const auto t1 = std::chrono::steady_clock::now();
 	// uint64_t n = 0;
-	// while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count() < 10.)
+	//while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count() < 10.)
 	while(true)
 	{
-		cv.wait(lock, []{ return !present;});
-		//auto t1 = std::chrono::steady_clock::now();
 		quad_tree->progress();
-		//auto time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1);
-
-		//printf("time: %fs\n", time.count());
-		//++n;
+		// ++n;
 	}
-
 	// const auto t2 = std::chrono::steady_clock::now();
 	// const double dt = std::chrono::duration<double>(t2-t1).count();
 
-	// double fps = n / dt;
+	// const double fps = n / dt;
 
 	// printf("fps: %f\n", fps);
 }
