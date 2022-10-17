@@ -8,24 +8,25 @@
 #include <unistd.h>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.5;
-constexpr double sim_size = 120.;
+constexpr double sim_size = 80.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
 constexpr double viscosity = 0.02;
-constexpr double collision_max_force = 100.0;
+constexpr double collision_max_force = 50.0;
 constexpr double collision_inner_diameter_ratio = 0.5;
 constexpr double initial_velocity_factor = 0.07;
-constexpr size_t num_particles = 8000;
-constexpr size_t max_particles_per_cell = 32;
+constexpr size_t num_particles = 4000;
+constexpr size_t max_particles_per_cell = 20;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
-constexpr int fps = 20;
+constexpr int fps = 15;
 
 uint32_t screen_width, screen_height;
 double ratio;
@@ -37,7 +38,7 @@ std::mutex m;
 
 struct vec2
 {
-	double x = 0, y = 0;
+	double x, y;
 };
 
 vec2 operator+(const vec2 &a, const vec2 &b)
@@ -99,8 +100,8 @@ struct cell
 	std::vector<cell> m_children;
 	const rect m_rect;
 	size_t m_num_particles = 0;
-	vec2 m_center_of_mass;
-	vec2 m_a;
+	vec2 m_center_of_mass = {};
+	vec2 m_a = {};
 	std::vector<cell *> m_surrounding_cells;
 
 	cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
@@ -187,58 +188,55 @@ struct cell
 		}
 	}
 
-	void propagate_particles_up()
+	void propagate_particles_up(std::vector<particle> &temp_particles)
 	{
 		if (!m_children.empty())
 		{
 			for (cell &child : m_children)
 			{
-				child.propagate_particles_up();
+				child.propagate_particles_up(temp_particles);
 			}
 		}
 
-		if (m_parent != nullptr)
+		if (m_parent != nullptr && !m_particles.empty())
 		{
-			std::vector<particle> new_particles;
-			new_particles.reserve(m_max_particles + 1);
-			size_t num_removed = 0;
-
 			for (particle &p : m_particles)
 			{
 				if (m_rect.is_inside(p.pos))
 				{
-					new_particles.push_back(p);
+					temp_particles.push_back(p);
 				}
 				else
 				{
 					m_parent->m_particles.push_back(p);
-					++num_removed;
+					--m_num_particles;
 				}
 			}
 
-			m_particles = std::move(new_particles);
-			m_num_particles -= num_removed;
+			m_particles.swap(temp_particles);
+			temp_particles.clear();
 		}
 	}
 
 	void propagate_particles_down()
 	{
-		if (!m_children.empty())
+		
+		if (m_num_particles <= m_max_particles)
 		{
-			if (m_num_particles <= m_max_particles)
+			unsubdivide();
+		}
+		else
+		{
+			m_num_particles -= m_particles.size();
+			for (particle &p : m_particles)
 			{
-				unsubdivide();
+				add(p);
 			}
-			else
-			{
-				m_num_particles -= m_particles.size();
-				for (particle &p : m_particles)
-				{
-					add(p);
-				}
-				m_particles.clear();
+			m_particles.clear();
 
-				for (cell &child : m_children)
+			for (cell &child : m_children)
+			{
+				if (!child.m_children.empty())
 				{
 					child.propagate_particles_down();
 				}
@@ -249,7 +247,9 @@ struct cell
 	void progress()
 	{
 		calculate_physics();
-		propagate_particles_up();
+		std::vector<particle> temp_particles;
+		temp_particles.reserve(m_max_particles + 1);
+		propagate_particles_up(temp_particles);
 		propagate_particles_down();
 	}
 
@@ -375,7 +375,7 @@ struct cell
 		{
 			cell &l = *leaf;
 
-			l.m_center_of_mass = vec2();
+			l.m_center_of_mass = {};
 			for (const particle &p : l.m_particles)
 			{
 				l.m_center_of_mass = l.m_center_of_mass + p.pos;
@@ -421,10 +421,10 @@ struct cell
 				simple_wall(p1, {sim_width, sim_height}, {-1, 0});
 				simple_wall(p1, {sim_width, sim_height}, {0, -1});
 
-				p1.a = vec2();
+				p1.a = {};
 			}
 
-			c1.m_a = vec2();
+			c1.m_a = {};
 			c1.m_surrounding_cells.clear();
 		}
 	}
@@ -515,7 +515,10 @@ void generate_particles(cell &quad_tree)
 void work(cell *quad_tree)
 {
 	std::unique_lock lock(m);
-	while (true)
+	// const auto t1 = std::chrono::steady_clock::now();
+	// uint64_t n = 0;
+	// while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count() < 10.)
+	while(true)
 	{
 		cv.wait(lock, []{ return !present;});
 		//auto t1 = std::chrono::steady_clock::now();
@@ -523,7 +526,15 @@ void work(cell *quad_tree)
 		//auto time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1);
 
 		//printf("time: %fs\n", time.count());
+		//++n;
 	}
+
+	// const auto t2 = std::chrono::steady_clock::now();
+	// const double dt = std::chrono::duration<double>(t2-t1).count();
+
+	// double fps = n / dt;
+
+	// printf("fps: %f\n", fps);
 }
 
 int main()
