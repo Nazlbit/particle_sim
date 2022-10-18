@@ -9,19 +9,20 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <random>
 
 using namespace std::chrono_literals;
 
-constexpr double char_ratio = 0.5;
-constexpr double sim_size = 50.;
+constexpr double char_ratio = 0.47;
+constexpr double sim_size = 300.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
-constexpr double drag_factor = 0.05;
-constexpr double collision_max_force = 5.0;
-constexpr double initial_velocity_factor = 0.0;
-constexpr size_t num_particles = 1000;
-constexpr size_t max_particles_per_cell = 11;
+constexpr double drag_factor = 0.1;
+constexpr double collision_max_force = 10.0;
+constexpr double initial_velocity_factor = 0.02;
+constexpr size_t num_particles = 16000;
+constexpr size_t max_particles_per_cell = 32;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
@@ -34,7 +35,7 @@ std::vector<char> screen;
 
 struct vec2
 {
-	double x, y;
+	double x = 0, y = 0;
 };
 
 vec2 operator+(const vec2 &a, const vec2 &b)
@@ -201,7 +202,7 @@ private:
 
 			if (m_parent != nullptr && !m_particles.empty())
 			{
-				for (particle &p : m_particles)
+				for (const particle &p : m_particles)
 				{
 					if (m_rect.is_inside(p.pos))
 					{
@@ -221,7 +222,6 @@ private:
 
 		void propagate_particles_down()
 		{
-
 			if (m_num_particles <= m_max_particles)
 			{
 				unsubdivide();
@@ -229,7 +229,7 @@ private:
 			else
 			{
 				m_num_particles -= m_particles.size();
-				for (particle &p : m_particles)
+				for (const particle &p : m_particles)
 				{
 					add(p);
 				}
@@ -515,18 +515,29 @@ void draw_quad_tree(const simulation &sim)
 	printf("%s", screen.data());
 }
 
+static std::random_device r;
+static std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+static std::mt19937_64 engine(seed);
+
+double random_double(double from, double to)
+{
+	std::uniform_real_distribution dis(from, to);
+	return dis(engine);
+}
+
 void generate_particles(simulation &sim)
 {
 	for (size_t i = 0; i < num_particles; ++i)
 	{
 		particle p;
-		p.pos = {(double)rand() / RAND_MAX * sim_width, (double)rand() / RAND_MAX * sim_height};
+		p.pos = {random_double(0, 1) * sim_width, random_double(0, 1) * sim_height};
 		p.pos = p.pos - vec2{sim_width, sim_height} * 0.5;
 		p.pos = p.pos * generation_scale;
 		p.pos = p.pos + vec2{sim_width, sim_height} * 0.5;
-		//p.pos.y = 5;
+
 		p.v = p.pos - vec2{sim_width, sim_height} * 0.5;
 		p.v = vec2{p.v.y, -p.v.x} * initial_velocity_factor;
+
 		sim.add(p);
 	}
 }
