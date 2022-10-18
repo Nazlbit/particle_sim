@@ -8,8 +8,8 @@
 #include <unistd.h>
 #include <atomic>
 #include <mutex>
-#include <condition_variable>
 #include <random>
+#include <array>
 
 using namespace std::chrono_literals;
 
@@ -27,6 +27,7 @@ constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
 constexpr int fps = 20;
+constexpr size_t num_threads = 10;
 
 uint32_t screen_width, screen_height;
 double ratio;
@@ -103,7 +104,7 @@ private:
 		size_t m_num_particles = 0;
 		vec2 m_center_of_mass = {};
 		vec2 m_a = {};
-		std::vector<cell *> m_surrounding_cells;
+		std::vector<const cell *> m_surrounding_cells;
 
 		cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
 		{
@@ -293,9 +294,11 @@ private:
 	mutable std::mutex m_mutex;
 	std::vector<particle> m_all_particles;
 	std::vector<particle> m_all_particles_tmp;
-	std::vector<cell *> m_leafs_tmp;
+	std::vector<cell *> m_leafs;
+	std::array<std::thread, num_threads> m_workers;
+	std::atomic_size_t m_atomic = 0;
 
-	static void cell_pair_interaction(cell &a, cell &b)
+	static void cell_pair_interaction(cell &a, const cell &b)
 	{
 		const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
 		const double distance_squared = ab * ab;
@@ -324,16 +327,15 @@ private:
 		}
 
 		a.m_a = a.m_a + unit_vec * (g * b.m_num_particles);
-		b.m_a = b.m_a - unit_vec * (g * a.m_num_particles);
 	}
 
-	static void particle_pair_interaction(particle &a, particle &b)
+	static vec2 particle_pair_interaction(const particle &a, const particle &b)
 	{
 		const vec2 ab = b.pos - a.pos;
 		const double distance_squared = ab * ab;
 		if (!std::isnormal(distance_squared)) [[unlikely]]
 		{
-			return;
+			return {};
 		}
 
 		const double distance = sqrt(distance_squared);
@@ -360,8 +362,19 @@ private:
 		}
 
 		/* Assume that mass is equal to 1 */
-		a.a = a.a + unit_vec * f;
-		b.a = b.a - unit_vec * f;
+		return unit_vec * f;
+	}
+
+	static void particle_pair_interaction_local(particle &a, particle &b)
+	{
+		const vec2 f = particle_pair_interaction(a, b);
+		a.a = a.a + f;
+		b.a = b.a - f;
+	}
+
+	static void particle_pair_interaction_global(particle &a, const particle &b)
+	{
+		a.a = a.a + particle_pair_interaction(a, b);
 	}
 
 	static void simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
@@ -383,21 +396,22 @@ private:
 		}
 	}
 
-	void calculate_physics()
+	void calculate_interactions()
 	{
-		/* Center of mass */
-		for (cell *leaf : m_leafs_tmp)
+		const size_t num = m_leafs.size();
+		int i;
+		while ((i = m_atomic++) < num)
 		{
-			leaf->calculate_center_of_mass();
-		}
+			cell &c1 = *m_leafs[i];
 
-		for (size_t i = 0; i < m_leafs_tmp.size(); i++)
-		{
-			cell &c1 = *m_leafs_tmp[i];
-
-			for (size_t j = i + 1; j < m_leafs_tmp.size(); j++)
+			for (size_t j = 0; j < num; j++)
 			{
-				cell &c2 = *m_leafs_tmp[j];
+				if(j == i)
+				{
+					continue;
+				}
+
+				const cell &c2 = *m_leafs[j];
 				cell_pair_interaction(c1, c2);
 			}
 
@@ -407,19 +421,34 @@ private:
 				for (size_t l = k + 1; l < c1.m_num_particles; l++)
 				{
 					particle &p2 = c1.m_particles[l];
-					particle_pair_interaction(p1, p2);
+					particle_pair_interaction_local(p1, p2);
 				}
 
-				for (cell *const c : c1.m_surrounding_cells)
+				for (const cell *const c : c1.m_surrounding_cells)
 				{
-					cell &c2 = *c;
-					for (particle &p2 : c2.m_particles)
+					const cell &c2 = *c;
+					for (const particle &p2 : c2.m_particles)
 					{
-						particle_pair_interaction(p1, p2);
+						particle_pair_interaction_global(p1, p2);
 					}
 				}
-				p1.a = p1.a + c1.m_a;
 
+				p1.a = p1.a + c1.m_a;
+			}
+			c1.m_surrounding_cells.clear();
+			c1.m_a = {};
+		}
+	}
+
+	void calculate_movement()
+	{
+		const size_t num = m_leafs.size();
+		int i;
+		while ((i = m_atomic++) < num)
+		{
+			cell &c1 = *m_leafs[i];
+			for (particle &p1 : c1.m_particles)
+			{
 				p1.pos = p1.pos + p1.v * dt + p1.a * dt * dt * 0.5;
 				p1.v = p1.v + p1.a * dt;
 
@@ -430,9 +459,24 @@ private:
 
 				p1.a = {};
 			}
+		}
+	}
 
-			c1.m_a = {};
-			c1.m_surrounding_cells.clear();
+	void wait_workers()
+	{
+		for (auto &worker : m_workers)
+		{
+			worker.join();
+		}
+	}
+
+	template<class F>
+	void spawn_workers(F &&f)
+	{
+		m_atomic = 0;
+		for (auto &worker : m_workers)
+		{
+			worker = std::thread(std::forward<F>(f));
 		}
 	}
 
@@ -447,16 +491,55 @@ public:
 
 	void progress()
 	{
-		m_leafs_tmp.clear();
-		m_root.find_leafs(m_leafs_tmp);
+		const auto t1 = std::chrono::steady_clock::now();
 
-		calculate_physics();
+		m_leafs.clear();
+		m_root.find_leafs(m_leafs);
+
+		const auto t2 = std::chrono::steady_clock::now();
+
+		/* Center of mass */
+		for (cell *leaf : m_leafs)
+		{
+			leaf->calculate_center_of_mass();
+		}
+
+		const auto t3 = std::chrono::steady_clock::now();
+
+		spawn_workers([this]
+					  { calculate_interactions(); });
+
+		wait_workers();
+
+		spawn_workers([this]
+					  { calculate_movement(); });
+
+		wait_workers();
+
+		const auto t4 = std::chrono::steady_clock::now();
 
 		m_root.propagate_particles_up();
 		m_root.propagate_particles_down();
 
+		const auto t5 = std::chrono::steady_clock::now();
+
 		m_all_particles_tmp.clear();
 		m_root.find_particles(m_all_particles_tmp);
+
+		const auto t6 = std::chrono::steady_clock::now();
+
+		const auto dt1 = (t2 - t1).count();
+		const auto dt2 = (t3 - t2).count();
+		const auto dt3 = (t4 - t3).count();
+		const auto dt4 = (t5 - t4).count();
+		const auto dt5 = (t6 - t5).count();
+
+		printf("dt1: %lluns\n", dt1);
+		printf("dt2: %lluns\n", dt2);
+		printf("dt3: %lluns\n", dt3);
+		printf("dt4: %lluns\n", dt4);
+		printf("dt5: %lluns\n", dt5);
+
 		{
 			std::lock_guard lock(m_mutex);
 			m_all_particles.swap(m_all_particles_tmp);
@@ -550,7 +633,8 @@ void work(simulation *sim)
 	while(true)
 	{
 		sim->progress();
-		// ++n;
+		//  ++n;
+
 	}
 	// const auto t2 = std::chrono::steady_clock::now();
 	// const double dt = std::chrono::duration<double>(t2-t1).count();
@@ -570,16 +654,16 @@ int main()
 
 	std::thread worker(work, &sim);
 
-	while (true)
-	{
-		const auto t1 = std::chrono::steady_clock::now();
-		draw_quad_tree(sim);
-		const auto draw_time = std::chrono::steady_clock::now() - t1;
+	// while (true)
+	// {
+	// 	const auto t1 = std::chrono::steady_clock::now();
+	// 	draw_quad_tree(sim);
+	// 	const auto draw_time = std::chrono::steady_clock::now() - t1;
 
-		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
+	// 	const auto sleep_duration = 1000'000'000ns / fps - draw_time;
 
-		std::this_thread::sleep_for(sleep_duration);
-	}
+	// 	std::this_thread::sleep_for(sleep_duration);
+	// }
 
 	worker.join();
 	return 0;
