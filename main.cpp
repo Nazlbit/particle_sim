@@ -13,16 +13,15 @@
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.5;
-constexpr double sim_size = 200.;
+constexpr double sim_size = 50.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
-constexpr double drag_factor = 0.03;
-constexpr double collision_max_force = 50.0;
-constexpr double collision_inner_diameter_ratio = 0.5;
-constexpr double initial_velocity_factor = 0.05;
-constexpr size_t num_particles = 20000;
-constexpr size_t max_particles_per_cell = 32;
+constexpr double drag_factor = 0.05;
+constexpr double collision_max_force = 5.0;
+constexpr double initial_velocity_factor = 0.0;
+constexpr size_t num_particles = 1000;
+constexpr size_t max_particles_per_cell = 11;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
@@ -87,179 +86,214 @@ struct rect
 	}
 };
 
-struct cell
+class simulation
 {
-	static const size_t m_max_particles = max_particles_per_cell;
-	static const uint8_t m_num_children = 4;
-
-	cell *const m_parent = nullptr;
-	const rect m_rect;
-
-	std::vector<particle> m_particles;
-	std::vector<cell> m_children;
-	size_t m_num_particles = 0;
-	vec2 m_center_of_mass = {};
-	vec2 m_a = {};
-	std::vector<cell *> m_surrounding_cells;
-	static std::mutex m_mutex;
-	static std::vector<particle> m_all_particles;
-	static std::vector<particle> m_all_particles_tmp;
-
-	cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
+private:
+	struct cell
 	{
-		m_particles.reserve(m_max_particles + 1);
-		m_children.reserve(m_num_children);
-	}
+		static const size_t m_max_particles = max_particles_per_cell;
+		static const uint8_t m_num_children = 4;
 
-	void subdivide()
-	{
-		static int i = 0;
-		i++;
-		assert(m_children.empty());
-		const vec2 cell_size = m_rect.size * 0.5;
-		const vec2 middle_point = m_rect.pos + cell_size;
+		cell *const m_parent = nullptr;
+		const rect m_rect;
 
-		m_children.emplace_back(this, rect{m_rect.pos, cell_size});
-		m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y}, cell_size});
-		m_children.emplace_back(this, rect{{m_rect.pos.x, m_rect.pos.y + cell_size.y}, cell_size});
-		m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y + cell_size.y}, cell_size});
+		std::vector<particle> m_particles;
+		std::vector<cell> m_children;
+		size_t m_num_particles = 0;
+		vec2 m_center_of_mass = {};
+		vec2 m_a = {};
+		std::vector<cell *> m_surrounding_cells;
 
-		m_num_particles = 0;
-		for (const particle &p : m_particles)
+		cell(cell *const parent, const rect r) : m_parent(parent), m_rect(r)
 		{
-			add(p);
+			m_particles.reserve(m_max_particles + 1);
+			m_children.reserve(m_num_children);
 		}
 
-		m_particles.clear();
-	}
-
-	void unsubdivide()
-	{
-		for (cell &child : m_children)
+		void subdivide()
 		{
-			if (!child.m_children.empty())
-			{
-				child.unsubdivide();
-			}
-			m_particles.insert(m_particles.cend(), child.m_particles.cbegin(), child.m_particles.cend());
-		}
-
-		m_children.clear();
-	}
-
-	void add(const particle &p)
-	{
-		++m_num_particles;
-
-		if (m_children.empty())
-		{
-			m_particles.push_back(p);
-			if (m_particles.size() > m_max_particles)
-			{
-				subdivide();
-			}
-		}
-		else
-		{
+			static int i = 0;
+			i++;
+			assert(m_children.empty());
 			const vec2 cell_size = m_rect.size * 0.5;
 			const vec2 middle_point = m_rect.pos + cell_size;
 
-			if (p.pos.y <= middle_point.y)
-			{
-				if (p.pos.x <= middle_point.x)
-				{
-					m_children[0].add(p);
-				}
-				else
-				{
-					m_children[1].add(p);
-				}
-			}
-			else
-			{
-				if (p.pos.x <= middle_point.x)
-				{
-					m_children[2].add(p);
-				}
-				else
-				{
-					m_children[3].add(p);
-				}
-			}
-		}
-	}
+			m_children.emplace_back(this, rect{m_rect.pos, cell_size});
+			m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y}, cell_size});
+			m_children.emplace_back(this, rect{{m_rect.pos.x, m_rect.pos.y + cell_size.y}, cell_size});
+			m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y + cell_size.y}, cell_size});
 
-	void propagate_particles_up()
-	{
-		static std::vector<particle> temp_particles;
-		if (!m_children.empty())
-		{
-			for (cell &child : m_children)
-			{
-				child.propagate_particles_up();
-			}
-		}
-
-		if (m_parent != nullptr && !m_particles.empty())
-		{
-			for (particle &p : m_particles)
-			{
-				if (m_rect.is_inside(p.pos))
-				{
-					temp_particles.push_back(p);
-				}
-				else
-				{
-					m_parent->m_particles.push_back(p);
-					--m_num_particles;
-				}
-			}
-
-			m_particles.swap(temp_particles);
-			temp_particles.clear();
-		}
-	}
-
-	void propagate_particles_down()
-	{
-		
-		if (m_num_particles <= m_max_particles)
-		{
-			unsubdivide();
-		}
-		else
-		{
-			m_num_particles -= m_particles.size();
-			for (particle &p : m_particles)
+			m_num_particles = 0;
+			for (const particle &p : m_particles)
 			{
 				add(p);
 			}
-			m_particles.clear();
 
+			m_particles.clear();
+		}
+
+		void unsubdivide()
+		{
 			for (cell &child : m_children)
 			{
 				if (!child.m_children.empty())
 				{
-					child.propagate_particles_down();
+					child.unsubdivide();
+				}
+				m_particles.insert(m_particles.cend(), child.m_particles.cbegin(), child.m_particles.cend());
+			}
+
+			m_children.clear();
+		}
+
+		void add(const particle &p)
+		{
+			++m_num_particles;
+
+			if (m_children.empty())
+			{
+				m_particles.push_back(p);
+				if (m_particles.size() > m_max_particles)
+				{
+					subdivide();
+				}
+			}
+			else
+			{
+				const vec2 cell_size = m_rect.size * 0.5;
+				const vec2 middle_point = m_rect.pos + cell_size;
+
+				if (p.pos.y <= middle_point.y)
+				{
+					if (p.pos.x <= middle_point.x)
+					{
+						m_children[0].add(p);
+					}
+					else
+					{
+						m_children[1].add(p);
+					}
+				}
+				else
+				{
+					if (p.pos.x <= middle_point.x)
+					{
+						m_children[2].add(p);
+					}
+					else
+					{
+						m_children[3].add(p);
+					}
 				}
 			}
 		}
-	}
 
-	void progress()
-	{
-		calculate_physics();
-
-		propagate_particles_up();
-		propagate_particles_down();
-
-		m_all_particles_tmp.clear();
-		find_particles(m_all_particles_tmp);
+		void propagate_particles_up()
 		{
-			std::lock_guard lock(m_mutex);
-			m_all_particles.swap(m_all_particles_tmp);
+			static std::vector<particle> temp_particles;
+			if (!m_children.empty())
+			{
+				for (cell &child : m_children)
+				{
+					child.propagate_particles_up();
+				}
+			}
+
+			if (m_parent != nullptr && !m_particles.empty())
+			{
+				for (particle &p : m_particles)
+				{
+					if (m_rect.is_inside(p.pos))
+					{
+						temp_particles.push_back(p);
+					}
+					else
+					{
+						m_parent->m_particles.push_back(p);
+						--m_num_particles;
+					}
+				}
+
+				m_particles.swap(temp_particles);
+				temp_particles.clear();
+			}
 		}
-	}
+
+		void propagate_particles_down()
+		{
+
+			if (m_num_particles <= m_max_particles)
+			{
+				unsubdivide();
+			}
+			else
+			{
+				m_num_particles -= m_particles.size();
+				for (particle &p : m_particles)
+				{
+					add(p);
+				}
+				m_particles.clear();
+
+				for (cell &child : m_children)
+				{
+					if (!child.m_children.empty())
+					{
+						child.propagate_particles_down();
+					}
+				}
+			}
+		}
+
+		void find_leafs(std::vector<cell *> &cells)
+		{
+			if (!m_children.empty())
+			{
+				for (cell &child : m_children)
+				{
+					child.find_leafs(cells);
+				}
+			}
+			else
+			{
+				if (m_num_particles > 0)
+				{
+					cells.push_back(this);
+				}
+			}
+		}
+
+		void find_particles(std::vector<particle> &particles) const
+		{
+			if (!m_children.empty())
+			{
+				for (const cell &child : m_children)
+				{
+					child.find_particles(particles);
+				}
+			}
+			else
+			{
+				particles.insert(particles.end(), m_particles.begin(), m_particles.end());
+			}
+		}
+
+		void calculate_center_of_mass()
+		{
+			m_center_of_mass = {};
+			for (const particle &p : m_particles)
+			{
+				m_center_of_mass = m_center_of_mass + p.pos;
+			};
+			m_center_of_mass = m_center_of_mass / m_num_particles;
+		}
+	};
+
+	cell m_root;
+	mutable std::mutex m_mutex;
+	std::vector<particle> m_all_particles;
+	std::vector<particle> m_all_particles_tmp;
+	std::vector<cell *> m_leafs_tmp;
 
 	static void cell_pair_interaction(cell &a, cell &b)
 	{
@@ -270,7 +304,7 @@ struct cell
 			return;
 		}
 
-		if (distance_squared < sqrt(a.m_rect.size.x * a.m_rect.size.y * b.m_rect.size.x * b.m_rect.size.y) * surrounding_cells_distance_multiplier) 
+		if (distance_squared < sqrt(a.m_rect.size.x * a.m_rect.size.y * b.m_rect.size.x * b.m_rect.size.y) * surrounding_cells_distance_multiplier)
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
@@ -280,11 +314,11 @@ struct cell
 		const vec2 unit_vec = ab / distance;
 
 		double g;
-		if (distance < diameter) 
+		if (distance < diameter)
 		{
 			g = 0;
 		}
-		else 
+		else
 		{
 			g = G / distance_squared;
 		}
@@ -307,26 +341,22 @@ struct cell
 
 		double f;
 
-		constexpr double inner_diameter = diameter * collision_inner_diameter_ratio;
-		if (distance < inner_diameter)
+		if (distance < diameter)
 		{
 			/* Collision */
-			constexpr double inner_diameter_squared = inner_diameter * inner_diameter;
+			constexpr double diameter_squared = diameter * diameter;
 			constexpr double q = 1. / collision_max_force;
-			f = -inner_diameter_squared * (1 + q) / (distance_squared + inner_diameter_squared * q) + 1;
+			f = -diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + 1;
+
+			/* Drag */
+			const double relative_v = (b.v - a.v) * unit_vec;
+			const double drag_f = drag_factor * relative_v;
+			f += drag_f;
 		}
 		else
 		{
 			/* Gravity */
 			f = G / distance_squared;
-		}
-
-		if (distance < diameter)
-		{
-			/* Drag */
-			const double relative_v = (b.v - a.v) * unit_vec;
-			const double drag_f = drag_factor * relative_v * abs(relative_v);
-			f += drag_f;
 		}
 
 		/* Assume that mass is equal to 1 */
@@ -353,51 +383,21 @@ struct cell
 		}
 	}
 
-	void find_leafs(std::vector<cell *> &cells)
-	{
-		if (!m_children.empty())
-		{
-			for (cell &child : m_children)
-			{
-				child.find_leafs(cells);
-			}
-		}
-		else
-		{
-			if (m_num_particles > 0)
-			{
-				cells.push_back(this);
-			}
-		}
-	}
-
 	void calculate_physics()
 	{
-		std::vector<cell *> leafs;
-		leafs.reserve(m_num_particles / m_max_particles * 2);
-
-		find_leafs(leafs);
-
 		/* Center of mass */
-		for (cell *leaf : leafs)
+		for (cell *leaf : m_leafs_tmp)
 		{
-			cell &l = *leaf;
-
-			l.m_center_of_mass = {};
-			for (const particle &p : l.m_particles)
-			{
-				l.m_center_of_mass = l.m_center_of_mass + p.pos;
-			};
-			l.m_center_of_mass = l.m_center_of_mass / l.m_num_particles;
+			leaf->calculate_center_of_mass();
 		}
 
-		for (size_t i = 0; i < leafs.size(); i++)
+		for (size_t i = 0; i < m_leafs_tmp.size(); i++)
 		{
-			cell &c1 = *leafs[i];
+			cell &c1 = *m_leafs_tmp[i];
 
-			for (size_t j = i + 1; j < leafs.size(); j++)
+			for (size_t j = i + 1; j < m_leafs_tmp.size(); j++)
 			{
-				cell &c2 = *leafs[j];
+				cell &c2 = *m_leafs_tmp[j];
 				cell_pair_interaction(c1, c2);
 			}
 
@@ -410,14 +410,13 @@ struct cell
 					particle_pair_interaction(p1, p2);
 				}
 
-				for(cell *const c : c1.m_surrounding_cells)
+				for (cell *const c : c1.m_surrounding_cells)
 				{
 					cell &c2 = *c;
-					for(particle &p2 : c2.m_particles)
+					for (particle &p2 : c2.m_particles)
 					{
 						particle_pair_interaction(p1, p2);
 					}
-
 				}
 				p1.a = p1.a + c1.m_a;
 
@@ -437,31 +436,39 @@ struct cell
 		}
 	}
 
-	void find_particles(std::vector<particle> &particles) const
-	{
-		if (!m_children.empty())
-		{
-			for (const cell &child : m_children)
-			{
-				child.find_particles(particles);
-			}
-		}
-		else
-		{
-			particles.insert(particles.end(), m_particles.begin(), m_particles.end());
-		}
-	}
+public:
+	simulation(const rect r) : m_root(nullptr, r) {}
 
-	static std::vector<particle> get_particles()
+	std::vector<particle> get_particles() const
 	{
 		std::lock_guard lock(m_mutex);
 		return m_all_particles;
 	}
-};
 
-std::mutex cell::m_mutex;
-std::vector<particle> cell::m_all_particles;
-std::vector<particle> cell::m_all_particles_tmp;
+	void progress()
+	{
+		m_leafs_tmp.clear();
+		m_root.find_leafs(m_leafs_tmp);
+
+		calculate_physics();
+
+		m_root.propagate_particles_up();
+		m_root.propagate_particles_down();
+
+		m_all_particles_tmp.clear();
+		m_root.find_particles(m_all_particles_tmp);
+		{
+			std::lock_guard lock(m_mutex);
+			m_all_particles.swap(m_all_particles_tmp);
+		}
+	}
+
+	void add(const particle &p)
+	{
+		m_root.add(p);
+		m_all_particles.push_back(p);
+	}
+};
 
 void init()
 {
@@ -491,10 +498,10 @@ void clear_screen()
 	screen[(screen_width + 1) * screen_height] = '\0';
 }
 
-void draw_quad_tree(const cell &quad_tree)
+void draw_quad_tree(const simulation &sim)
 {
 	clear_screen();
-	for (const particle &p : quad_tree.get_particles())
+	for (const particle &p : sim.get_particles())
 	{
 		int x = p.pos.x / sim_width * screen_width;
 		int y = p.pos.y / sim_height * screen_height;
@@ -508,7 +515,7 @@ void draw_quad_tree(const cell &quad_tree)
 	printf("%s", screen.data());
 }
 
-void generate_particles(cell &quad_tree)
+void generate_particles(simulation &sim)
 {
 	for (size_t i = 0; i < num_particles; ++i)
 	{
@@ -520,18 +527,18 @@ void generate_particles(cell &quad_tree)
 		//p.pos.y = 5;
 		p.v = p.pos - vec2{sim_width, sim_height} * 0.5;
 		p.v = vec2{p.v.y, -p.v.x} * initial_velocity_factor;
-		quad_tree.add(p);
+		sim.add(p);
 	}
 }
 
-void work(cell *quad_tree)
+void work(simulation *sim)
 {
-	//const auto t1 = std::chrono::steady_clock::now();
+	// const auto t1 = std::chrono::steady_clock::now();
 	// uint64_t n = 0;
-	//while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count() < 10.)
+	// while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count() < 10.)
 	while(true)
 	{
-		quad_tree->progress();
+		sim->progress();
 		// ++n;
 	}
 	// const auto t2 = std::chrono::steady_clock::now();
@@ -546,16 +553,16 @@ int main()
 {
 	init();
 
-	cell quad_tree(nullptr, {{0, 0}, {sim_width, sim_height}});
+	simulation sim({{0, 0}, {sim_width, sim_height}});
 
-	generate_particles(quad_tree);
+	generate_particles(sim);
 
-	std::thread worker(work, &quad_tree);
+	std::thread worker(work, &sim);
 
 	while (true)
 	{
 		const auto t1 = std::chrono::steady_clock::now();
-		draw_quad_tree(quad_tree);
+		draw_quad_tree(sim);
 		const auto draw_time = std::chrono::steady_clock::now() - t1;
 
 		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
