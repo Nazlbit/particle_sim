@@ -10,18 +10,19 @@
 #include <mutex>
 #include <random>
 #include <array>
+#include <functional>
 
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.47;
-constexpr double sim_size = 300.;
+constexpr double sim_size = 150.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
 constexpr double drag_factor = 0.1;
 constexpr double collision_max_force = 10.0;
-constexpr double initial_velocity_factor = 0.02;
-constexpr size_t num_particles = 16000;
+constexpr double initial_velocity_factor = 0.04;
+constexpr size_t num_particles = 4000;
 constexpr size_t max_particles_per_cell = 32;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
@@ -85,6 +86,48 @@ struct rect
 			   p.y > pos.y &&
 			   p.x <= pos.x + size.x &&
 			   p.y <= pos.y + size.y;
+	}
+};
+
+class barrier
+{
+	const uint64_t m_num;
+	std::atomic_uint64_t m_i = 0;
+	std::atomic_bool m_wait = true;
+	std::function<void()> m_on_barrier;
+
+public:
+	template<class T>
+	barrier(const uint64_t num, T &&on_barrier)
+		: m_num(num)
+		, m_on_barrier(std::forward<T>(on_barrier)) {}
+
+	void wait()
+	{
+		while(!m_wait)
+		{
+			// spinlock
+		}
+
+		if(++m_i < m_num)
+		{
+			while(m_wait)
+			{
+				// spinlock
+			}
+			--m_i;
+		}
+		else
+		{
+			m_on_barrier();
+			--m_i;
+			m_wait = false;
+			while (m_i != 0)
+			{
+				// spinlock
+			}
+			m_wait = true;
+		}
 	}
 };
 
@@ -297,6 +340,7 @@ private:
 	std::vector<cell *> m_leafs;
 	std::array<std::thread, num_threads> m_workers;
 	std::atomic_size_t m_atomic = 0;
+	barrier m_barrier{num_threads, [this] { m_atomic = 0; }};
 
 	static void cell_pair_interaction(cell &a, const cell &b)
 	{
@@ -348,7 +392,7 @@ private:
 			/* Collision */
 			constexpr double diameter_squared = diameter * diameter;
 			constexpr double q = 1. / collision_max_force;
-			f = -diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + 1;
+			f = 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q);
 
 			/* Drag */
 			const double relative_v = (b.v - a.v) * unit_vec;
@@ -396,10 +440,19 @@ private:
 		}
 	}
 
-	void calculate_interactions()
+	void calculate_physics()
 	{
 		const size_t num = m_leafs.size();
 		int i;
+
+		while ((i = m_atomic++) < num)
+		{
+			cell &c = *m_leafs[i];
+			c.calculate_center_of_mass();
+		}
+
+		m_barrier.wait();
+
 		while ((i = m_atomic++) < num)
 		{
 			cell &c1 = *m_leafs[i];
@@ -438,12 +491,9 @@ private:
 			c1.m_surrounding_cells.clear();
 			c1.m_a = {};
 		}
-	}
 
-	void calculate_movement()
-	{
-		const size_t num = m_leafs.size();
-		int i;
+		m_barrier.wait();
+
 		while ((i = m_atomic++) < num)
 		{
 			cell &c1 = *m_leafs[i];
@@ -498,47 +548,32 @@ public:
 
 		const auto t2 = std::chrono::steady_clock::now();
 
-		/* Center of mass */
-		for (cell *leaf : m_leafs)
-		{
-			leaf->calculate_center_of_mass();
-		}
+		spawn_workers([this]
+					  { calculate_physics(); });
+
+		wait_workers();
 
 		const auto t3 = std::chrono::steady_clock::now();
-
-		spawn_workers([this]
-					  { calculate_interactions(); });
-
-		wait_workers();
-
-		spawn_workers([this]
-					  { calculate_movement(); });
-
-		wait_workers();
-
-		const auto t4 = std::chrono::steady_clock::now();
 
 		m_root.propagate_particles_up();
 		m_root.propagate_particles_down();
 
-		const auto t5 = std::chrono::steady_clock::now();
+		const auto t4 = std::chrono::steady_clock::now();
 
 		m_all_particles_tmp.clear();
 		m_root.find_particles(m_all_particles_tmp);
 
-		const auto t6 = std::chrono::steady_clock::now();
+		const auto t5 = std::chrono::steady_clock::now();
 
 		const auto dt1 = (t2 - t1).count();
 		const auto dt2 = (t3 - t2).count();
 		const auto dt3 = (t4 - t3).count();
 		const auto dt4 = (t5 - t4).count();
-		const auto dt5 = (t6 - t5).count();
 
-		printf("dt1: %lluns\n", dt1);
-		printf("dt2: %lluns\n", dt2);
-		printf("dt3: %lluns\n", dt3);
-		printf("dt4: %lluns\n", dt4);
-		printf("dt5: %lluns\n", dt5);
+		// printf("dt1: %lluns\n", dt1);
+		// printf("dt2: %lluns\n", dt2);
+		// printf("dt3: %lluns\n", dt3);
+		// printf("dt4: %lluns\n", dt4);
 
 		{
 			std::lock_guard lock(m_mutex);
@@ -654,16 +689,16 @@ int main()
 
 	std::thread worker(work, &sim);
 
-	// while (true)
-	// {
-	// 	const auto t1 = std::chrono::steady_clock::now();
-	// 	draw_quad_tree(sim);
-	// 	const auto draw_time = std::chrono::steady_clock::now() - t1;
+	while (true)
+	{
+		const auto t1 = std::chrono::steady_clock::now();
+		draw_quad_tree(sim);
+		const auto draw_time = std::chrono::steady_clock::now() - t1;
 
-	// 	const auto sleep_duration = 1000'000'000ns / fps - draw_time;
+		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
 
-	// 	std::this_thread::sleep_for(sleep_duration);
-	// }
+		std::this_thread::sleep_for(sleep_duration);
+	}
 
 	worker.join();
 	return 0;
