@@ -11,24 +11,26 @@
 #include <random>
 #include <array>
 #include <functional>
+#include <condition_variable>
+#include <shared_mutex>
 
 using namespace std::chrono_literals;
 
 constexpr double char_ratio = 0.47;
-constexpr double sim_size = 150.;
+constexpr double sim_size = 300.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
 constexpr double drag_factor = 0.1;
-constexpr double collision_max_force = 10.0;
-constexpr double initial_velocity_factor = 0.04;
-constexpr size_t num_particles = 4000;
-constexpr size_t max_particles_per_cell = 32;
+constexpr double collision_max_force = 40.0;
+constexpr double initial_velocity_factor = 0.02;
+constexpr size_t num_particles = 16000;
+constexpr size_t max_particles_per_cell = 64;
 constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
 constexpr int fps = 20;
-constexpr size_t num_threads = 10;
+constexpr size_t num_threads = 6;
 
 uint32_t screen_width, screen_height;
 double ratio;
@@ -104,11 +106,10 @@ public:
 
 	void wait()
 	{
-		while(!m_wait)
+		while (!m_wait)
 		{
 			// spinlock
 		}
-
 		if(++m_i < m_num)
 		{
 			while(m_wait)
@@ -334,13 +335,24 @@ private:
 	};
 
 	cell m_root;
-	mutable std::mutex m_mutex;
-	std::vector<particle> m_all_particles;
-	std::vector<particle> m_all_particles_tmp;
+	mutable std::mutex m_particles_mutex;
+	mutable std::vector<particle> m_all_particles[3];
 	std::vector<cell *> m_leafs;
 	std::array<std::thread, num_threads> m_workers;
-	std::atomic_size_t m_atomic = 0;
-	barrier m_barrier{num_threads, [this] { m_atomic = 0; }};
+	std::atomic_size_t m_leafs_atomic = 0;
+	barrier m_barrier{num_threads, [this]
+					  { m_leafs_atomic = 0; }};
+
+	std::shared_mutex m_head_workers_mutex;
+	std::condition_variable_any m_head_workers_cv;
+	bool m_workers_awake = false;
+	barrier m_barrier_end{num_threads, [this]{
+		m_leafs_atomic = 0;
+		m_head_workers_mutex.lock();
+		m_workers_awake = false;
+		m_head_workers_mutex.unlock();
+		m_head_workers_cv.notify_one();
+	}};
 
 	static void cell_pair_interaction(cell &a, const cell &b)
 	{
@@ -442,133 +454,146 @@ private:
 
 	void calculate_physics()
 	{
-		const size_t num = m_leafs.size();
 		int i;
-
-		while ((i = m_atomic++) < num)
+		std::shared_lock lock(m_head_workers_mutex, std::defer_lock);
+		while (true)
 		{
-			cell &c = *m_leafs[i];
-			c.calculate_center_of_mass();
-		}
+			m_barrier_end.wait();
 
-		m_barrier.wait();
+			lock.lock();
+			m_head_workers_cv.wait(lock, [this]
+					   { return m_workers_awake; });
+			lock.unlock();
 
-		while ((i = m_atomic++) < num)
-		{
-			cell &c1 = *m_leafs[i];
+			const size_t num = m_leafs.size();
 
-			for (size_t j = 0; j < num; j++)
+			while ((i = m_leafs_atomic++) < num)
 			{
-				if(j == i)
-				{
-					continue;
-				}
-
-				const cell &c2 = *m_leafs[j];
-				cell_pair_interaction(c1, c2);
+				cell &c = *m_leafs[i];
+				c.calculate_center_of_mass();
 			}
 
-			for (size_t k = 0; k < c1.m_num_particles; k++)
-			{
-				particle &p1 = c1.m_particles[k];
-				for (size_t l = k + 1; l < c1.m_num_particles; l++)
-				{
-					particle &p2 = c1.m_particles[l];
-					particle_pair_interaction_local(p1, p2);
-				}
+			m_barrier.wait();
 
-				for (const cell *const c : c1.m_surrounding_cells)
+			while ((i = m_leafs_atomic++) < num)
+			{
+				cell &c1 = *m_leafs[i];
+
+				for (size_t j = 0; j < num; j++)
 				{
-					const cell &c2 = *c;
-					for (const particle &p2 : c2.m_particles)
+					if(j == i)
 					{
-						particle_pair_interaction_global(p1, p2);
+						continue;
 					}
+
+					const cell &c2 = *m_leafs[j];
+					cell_pair_interaction(c1, c2);
 				}
 
-				p1.a = p1.a + c1.m_a;
+				for (size_t k = 0; k < c1.m_num_particles; k++)
+				{
+					particle &p1 = c1.m_particles[k];
+					for (size_t l = k + 1; l < c1.m_num_particles; l++)
+					{
+						particle &p2 = c1.m_particles[l];
+						particle_pair_interaction_local(p1, p2);
+					}
+
+					for (const cell *const c : c1.m_surrounding_cells)
+					{
+						const cell &c2 = *c;
+						for (const particle &p2 : c2.m_particles)
+						{
+							particle_pair_interaction_global(p1, p2);
+						}
+					}
+
+					p1.a = p1.a + c1.m_a;
+				}
+				c1.m_surrounding_cells.clear();
+				c1.m_a = {};
 			}
-			c1.m_surrounding_cells.clear();
-			c1.m_a = {};
-		}
 
-		m_barrier.wait();
+			m_barrier.wait();
 
-		while ((i = m_atomic++) < num)
-		{
-			cell &c1 = *m_leafs[i];
-			for (particle &p1 : c1.m_particles)
+			while ((i = m_leafs_atomic++) < num)
 			{
-				p1.pos = p1.pos + p1.v * dt + p1.a * dt * dt * 0.5;
-				p1.v = p1.v + p1.a * dt;
+				cell &c1 = *m_leafs[i];
+				for (particle &p1 : c1.m_particles)
+				{
+					p1.pos = p1.pos + p1.v * dt + p1.a * dt * dt * 0.5;
+					p1.v = p1.v + p1.a * dt;
 
-				simple_wall(p1, {0, 0}, {1, 0});
-				simple_wall(p1, {0, 0}, {0, 1});
-				simple_wall(p1, {sim_width, sim_height}, {-1, 0});
-				simple_wall(p1, {sim_width, sim_height}, {0, -1});
+					simple_wall(p1, {0, 0}, {1, 0});
+					simple_wall(p1, {0, 0}, {0, 1});
+					simple_wall(p1, {sim_width, sim_height}, {-1, 0});
+					simple_wall(p1, {sim_width, sim_height}, {0, -1});
 
-				p1.a = {};
+					p1.a = {};
+				}
 			}
 		}
 	}
 
-	void wait_workers()
-	{
-		for (auto &worker : m_workers)
-		{
-			worker.join();
-		}
-	}
-
-	template<class F>
-	void spawn_workers(F &&f)
-	{
-		m_atomic = 0;
-		for (auto &worker : m_workers)
-		{
-			worker = std::thread(std::forward<F>(f));
-		}
-	}
+	// void wait_workers()
+	// {
+	// 	for (auto &worker : m_workers)
+	// 	{
+	// 		worker.join();
+	// 	}
+	// }
 
 public:
-	simulation(const rect r) : m_root(nullptr, r) {}
-
-	std::vector<particle> get_particles() const
+	simulation(const rect r) : m_root(nullptr, r)
 	{
-		std::lock_guard lock(m_mutex);
-		return m_all_particles;
+		m_leafs_atomic = 0;
+		for (auto &worker : m_workers)
+		{
+			worker = std::thread([this]{ calculate_physics(); });
+		}
+	}
+
+	const std::vector<particle> &get_particles() const
+	{
+		std::lock_guard lock(m_particles_mutex);
+		m_all_particles[0].swap(m_all_particles[1]);
+		return m_all_particles[0];
 	}
 
 	void progress()
 	{
-		const auto t1 = std::chrono::steady_clock::now();
+		// const auto t1 = std::chrono::steady_clock::now();
 
 		m_leafs.clear();
 		m_root.find_leafs(m_leafs);
 
-		const auto t2 = std::chrono::steady_clock::now();
+		// const auto t2 = std::chrono::steady_clock::now();
 
-		spawn_workers([this]
-					  { calculate_physics(); });
+		std::unique_lock lock{m_head_workers_mutex};
+		m_workers_awake = true;
+		lock.unlock();
+		m_head_workers_cv.notify_all();
+		lock.lock();
+		m_head_workers_cv.wait(lock, [this]
+				   { return !m_workers_awake; });
+		lock.unlock();
 
-		wait_workers();
-
-		const auto t3 = std::chrono::steady_clock::now();
+		// const auto t3 = std::chrono::steady_clock::now();
 
 		m_root.propagate_particles_up();
 		m_root.propagate_particles_down();
 
-		const auto t4 = std::chrono::steady_clock::now();
+		// const auto t4 = std::chrono::steady_clock::now();
 
-		m_all_particles_tmp.clear();
-		m_root.find_particles(m_all_particles_tmp);
+		m_all_particles[2].clear();
+		m_root.find_particles(m_all_particles[2]);
 
-		const auto t5 = std::chrono::steady_clock::now();
+		// const auto t5 = std::chrono::steady_clock::now();
 
-		const auto dt1 = (t2 - t1).count();
-		const auto dt2 = (t3 - t2).count();
-		const auto dt3 = (t4 - t3).count();
-		const auto dt4 = (t5 - t4).count();
+		// const auto dt1 = (t2 - t1).count();
+		// const auto dt2 = (t3 - t2).count();
+		// const auto dt3 = (t4 - t3).count();
+		// const auto dt4 = (t5 - t4).count();
 
 		// printf("dt1: %lluns\n", dt1);
 		// printf("dt2: %lluns\n", dt2);
@@ -576,15 +601,14 @@ public:
 		// printf("dt4: %lluns\n", dt4);
 
 		{
-			std::lock_guard lock(m_mutex);
-			m_all_particles.swap(m_all_particles_tmp);
+			std::lock_guard lock(m_particles_mutex);
+			m_all_particles[2].swap(m_all_particles[1]);
 		}
 	}
 
 	void add(const particle &p)
 	{
 		m_root.add(p);
-		m_all_particles.push_back(p);
 	}
 };
 
