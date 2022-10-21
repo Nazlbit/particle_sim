@@ -21,8 +21,8 @@ constexpr double sim_size = 300.;
 constexpr double G = 0.02;
 constexpr double diameter = 1.;
 constexpr double dt = 0.01;
-constexpr double drag_factor = 0.1;
-constexpr double collision_max_force = 40.0;
+constexpr double drag_factor = 0.05;
+constexpr double collision_max_force = 20.0;
 constexpr double initial_velocity_factor = 0.02;
 constexpr size_t num_particles = 16000;
 constexpr size_t max_particles_per_cell = 64;
@@ -30,7 +30,7 @@ constexpr double wall_collision_velocity = 0.;
 constexpr double surrounding_cells_distance_multiplier = 2.;
 constexpr double generation_scale = 0.5;
 constexpr int fps = 20;
-constexpr size_t num_threads = 6;
+constexpr size_t num_threads = 7;
 
 uint32_t screen_width, screen_height;
 double ratio;
@@ -339,18 +339,16 @@ private:
 	mutable std::vector<particle> m_all_particles[3];
 	std::vector<cell *> m_leafs;
 	std::array<std::thread, num_threads> m_workers;
-	std::atomic_size_t m_leafs_atomic = 0;
-	barrier m_barrier{num_threads, [this]
-					  { m_leafs_atomic = 0; }};
-
+	std::atomic_size_t m_leafs_iterator = 0;
 	std::shared_mutex m_head_workers_mutex;
 	std::condition_variable_any m_head_workers_cv;
 	bool m_workers_awake = false;
-	barrier m_barrier_end{num_threads, [this]{
-		m_leafs_atomic = 0;
-		m_head_workers_mutex.lock();
+	barrier m_barrier{num_threads, [this] {
+		m_leafs_iterator = 0;
+	}};
+	barrier m_barrier_end{num_threads, [this] {
+		m_leafs_iterator = 0;
 		m_workers_awake = false;
-		m_head_workers_mutex.unlock();
 		m_head_workers_cv.notify_one();
 	}};
 
@@ -455,19 +453,15 @@ private:
 	void calculate_physics()
 	{
 		int i;
-		std::shared_lock lock(m_head_workers_mutex, std::defer_lock);
+		std::shared_lock lock(m_head_workers_mutex);
 		while (true)
 		{
-			m_barrier_end.wait();
-
-			lock.lock();
 			m_head_workers_cv.wait(lock, [this]
-					   { return m_workers_awake; });
-			lock.unlock();
+								   { return m_workers_awake; });
 
 			const size_t num = m_leafs.size();
 
-			while ((i = m_leafs_atomic++) < num)
+			while ((i = m_leafs_iterator++) < num)
 			{
 				cell &c = *m_leafs[i];
 				c.calculate_center_of_mass();
@@ -475,7 +469,7 @@ private:
 
 			m_barrier.wait();
 
-			while ((i = m_leafs_atomic++) < num)
+			while ((i = m_leafs_iterator++) < num)
 			{
 				cell &c1 = *m_leafs[i];
 
@@ -516,7 +510,7 @@ private:
 
 			m_barrier.wait();
 
-			while ((i = m_leafs_atomic++) < num)
+			while ((i = m_leafs_iterator++) < num)
 			{
 				cell &c1 = *m_leafs[i];
 				for (particle &p1 : c1.m_particles)
@@ -532,6 +526,7 @@ private:
 					p1.a = {};
 				}
 			}
+			m_barrier_end.wait();
 		}
 	}
 
@@ -546,7 +541,6 @@ private:
 public:
 	simulation(const rect r) : m_root(nullptr, r)
 	{
-		m_leafs_atomic = 0;
 		for (auto &worker : m_workers)
 		{
 			worker = std::thread([this]{ calculate_physics(); });
@@ -562,6 +556,7 @@ public:
 
 	void progress()
 	{
+		std::unique_lock lock{m_head_workers_mutex};
 		// const auto t1 = std::chrono::steady_clock::now();
 
 		m_leafs.clear();
@@ -569,14 +564,10 @@ public:
 
 		// const auto t2 = std::chrono::steady_clock::now();
 
-		std::unique_lock lock{m_head_workers_mutex};
 		m_workers_awake = true;
-		lock.unlock();
 		m_head_workers_cv.notify_all();
-		lock.lock();
 		m_head_workers_cv.wait(lock, [this]
-				   { return !m_workers_awake; });
-		lock.unlock();
+							   { return !m_workers_awake; });
 
 		// const auto t3 = std::chrono::steady_clock::now();
 
