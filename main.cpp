@@ -401,8 +401,9 @@ private:
 		{
 			/* Collision */
 			constexpr double diameter_squared = diameter * diameter;
-			constexpr double q = 1. / collision_max_force;
-			f = 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q);
+			constexpr double gravity_at_diameter = G / diameter_squared;
+			constexpr double q = 1. / (collision_max_force + gravity_at_diameter);
+			f = 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + gravity_at_diameter;
 
 			/* Drag */
 			const double relative_v = (b.v - a.v) * unit_vec;
