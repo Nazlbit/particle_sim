@@ -5,7 +5,7 @@ int main()
 {
 	try
 	{
-		app::application application;
+		application application;
 		application.run();
 	}
 	catch(const std::exception &ex)
