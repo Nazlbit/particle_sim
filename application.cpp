@@ -79,23 +79,24 @@ void application::work()
 
 void application::run()
 {
-	init();
-	generate_particles();
+	m_wnd = window("Hello world", 100, 100);
+	// init();
+	// generate_particles();
 
-	std::thread worker([this]
-						{ work(); });
-	while (true)
-	{
-		const auto t1 = std::chrono::steady_clock::now();
+	// std::thread worker([this]
+	// 					{ work(); });
+	// while (true)
+	// {
+	// 	const auto t1 = std::chrono::steady_clock::now();
 
-		draw_quad_tree();
+	// 	draw_quad_tree();
 
-		const auto draw_time = std::chrono::steady_clock::now() - t1;
+	// 	const auto draw_time = std::chrono::steady_clock::now() - t1;
 
-		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
+	// 	const auto sleep_duration = 1000'000'000ns / fps - draw_time;
 
-		std::this_thread::sleep_for(sleep_duration);
-	}
+	// 	std::this_thread::sleep_for(sleep_duration);
+	// }
 
-	worker.join();
+	// worker.join();
 }

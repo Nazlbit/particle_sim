@@ -1,5 +1,6 @@
 #pragma once
 #include "simulation.hpp"
+#include "window.hpp"
 
 class application
 {
@@ -25,6 +26,8 @@ private:
 	uint32_t m_screen_width, m_screen_height;
 	double m_sim_width, m_sim_height;
 	std::vector<char> m_screen;
+
+	window m_wnd;
 
 	void init();
 	void clear_screen();
