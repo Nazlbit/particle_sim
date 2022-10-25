@@ -23,7 +23,7 @@ void application::init()
 	const double ratio = m_screen_width * char_ratio / m_screen_height;
 	m_sim_width = sim_size * ratio;
 	m_sim_height = sim_size;
-	m_screen.resize((m_screen_width + 1) * m_screen_height + 1);
+	m_screen.reserve((m_screen_width + 1) * m_screen_height);
 
 	m_simulation = std::make_unique<simulation>(rect{vec2{0, 0}, vec2{m_sim_width, m_sim_height} * 0.5}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
 }
@@ -35,7 +35,7 @@ void application::clear_screen()
 	{
 		m_screen[(m_screen_width + 1) * i + m_screen_width] = '\n';
 	}
-	m_screen[(m_screen_width + 1) * m_screen_height] = '\0';
+	m_screen[(m_screen_width + 1) * m_screen_height - 1] = '\0';
 }
 
 void application::draw_quad_tree()

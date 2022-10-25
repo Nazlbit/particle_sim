@@ -56,6 +56,7 @@ private:
 	cell m_root;
     mutable std::mutex m_particles_mutex;
     mutable std::vector<particle> m_all_particles[3];
+	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
     std::vector<std::thread> m_workers;
     std::atomic_size_t m_leafs_iterator = 0;

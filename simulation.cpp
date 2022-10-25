@@ -234,7 +234,11 @@ void simulation::stop_workers()
 const std::vector<particle> &simulation::get_particles() const
 {
 	std::lock_guard lock(m_particles_mutex);
-	m_all_particles[0].swap(m_all_particles[1]);
+	if(m_swap_buffers)
+	{
+		m_all_particles[0].swap(m_all_particles[1]);
+		m_swap_buffers = false;
+	}
 	return m_all_particles[0];
 }
 
@@ -278,12 +282,14 @@ void simulation::progress()
 	{
 		std::lock_guard lock(m_particles_mutex);
 		m_all_particles[2].swap(m_all_particles[1]);
+		m_swap_buffers = true;
 	}
 }
 
 void simulation::add(const particle &p)
 {
 	m_root.add(p);
+	m_all_particles[0].push_back(p);
 }
 
 void simulation::calculate_physics()
