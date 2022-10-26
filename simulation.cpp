@@ -159,18 +159,21 @@ void simulation::cell::find_leafs(std::vector<cell *> &cells)
 	}
 }
 
-void simulation::cell::find_particles(std::vector<particle> &particles) const
+void simulation::cell::find_particles_pos(std::vector<vec2> &particles) const
 {
 	if (!m_children.empty())
 	{
 		for (const cell &child : m_children)
 		{
-			child.find_particles(particles);
+			child.find_particles_pos(particles);
 		}
 	}
 	else
 	{
-		particles.insert(particles.end(), m_particles.begin(), m_particles.end());
+		for(const particle &p : m_particles)
+		{
+			particles.push_back(p.pos);
+		}
 	}
 }
 
@@ -231,7 +234,7 @@ void simulation::stop_workers()
 	m_head_workers_cv.notify_one();
 }
 
-const std::vector<particle> &simulation::get_particles() const
+const std::vector<vec2> &simulation::get_particles_pos() const
 {
 	std::lock_guard lock(m_particles_mutex);
 	if(m_swap_buffers)
@@ -265,7 +268,7 @@ void simulation::progress()
 	// const auto t4 = std::chrono::steady_clock::now();
 
 	m_all_particles[2].clear();
-	m_root.find_particles(m_all_particles[2]);
+	m_root.find_particles_pos(m_all_particles[2]);
 
 	// const auto t5 = std::chrono::steady_clock::now();
 
@@ -289,7 +292,7 @@ void simulation::progress()
 void simulation::add(const particle &p)
 {
 	m_root.add(p);
-	m_all_particles[0].push_back(p);
+	m_all_particles[0].push_back(p.pos);
 }
 
 void simulation::calculate_physics()

@@ -48,14 +48,14 @@ private:
 
 		void find_leafs(std::vector<cell *> &cells);
 
-		void find_particles(std::vector<particle> &particles) const;
+		void find_particles_pos(std::vector<vec2> &particles) const;
 
 		void calculate_center_of_mass();
 	};
 
 	cell m_root;
     mutable std::mutex m_particles_mutex;
-    mutable std::vector<particle> m_all_particles[3];
+    mutable std::vector<vec2> m_all_particles[3];
 	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
     std::vector<std::thread> m_workers;
@@ -100,7 +100,7 @@ public:
 
 	~simulation();
 
-	const std::vector<particle> &get_particles() const;
+	const std::vector<vec2> &get_particles_pos() const;
 
 	void progress();
 
