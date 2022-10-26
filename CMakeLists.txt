@@ -6,7 +6,7 @@ set(HEADER_FILES application.hpp barrier.hpp exception.hpp glfw_singleton.hpp he
 
 add_executable(particles ${SRC_FILES} ${HEADER_FILES})
 
-set_target_properties(particles PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+set_target_properties(particles PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
 target_link_libraries(particles pthread)
 

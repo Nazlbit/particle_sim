@@ -7,7 +7,7 @@ window::window(const char *title, int width, int height)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+	//glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	m_wnd = glfwCreateWindow(width, height, title, nullptr, nullptr);
 	ASSERT_EX_M(m_wnd, "Failed to create a window");

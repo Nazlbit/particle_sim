@@ -207,6 +207,11 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_drag_factor(drag_factor),
 	m_cell_proximity_factor(cell_proximity_factor)
 {
+	m_walls.left = {m_root.m_rect.pos.x - m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
+	m_walls.right = {m_root.m_rect.pos.x + m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
+	m_walls.bottom = {m_root.m_rect.pos.x, m_root.m_rect.pos.y - m_root.m_rect.half_size.y};
+	m_walls.top = {m_root.m_rect.pos.x, m_root.m_rect.pos.y + m_root.m_rect.half_size.y};
+
 	for (auto &worker : m_workers)
 	{
 		worker = std::thread([this] {
@@ -363,10 +368,10 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, {m_root.m_rect.pos.x - m_root.m_rect.half_size.x, m_root.m_rect.pos.y}, {1, 0});
-				simple_wall(p1, {m_root.m_rect.pos.x + m_root.m_rect.half_size.x, m_root.m_rect.pos.y}, {-1, 0});
-				simple_wall(p1, {m_root.m_rect.pos.x, m_root.m_rect.pos.y - m_root.m_rect.half_size.y}, {0, 1});
-				simple_wall(p1, {m_root.m_rect.pos.x, m_root.m_rect.pos.y + m_root.m_rect.half_size.y}, {0, -1});
+				simple_wall(p1, m_walls.left, {1, 0});
+				simple_wall(p1, m_walls.right, {-1, 0});
+				simple_wall(p1, m_walls.bottom, {0, 1});
+				simple_wall(p1, m_walls.top, {0, -1});
 
 				p1.a = {};
 			}
@@ -379,10 +384,10 @@ void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
 {
 	const vec2 r_vec = p.pos - wall_pos;
 	const double distance = r_vec * wall_normal;
-	const double r = m_particle_size * 0.5;
-	if (distance < r) [[unlikely]]
+	//const double r = m_particle_size * 0.5;
+	if (distance < m_particle_size) [[unlikely]]
 	{
-		p.pos = p.pos + wall_normal * (r - distance) * 1.001;
+		p.pos = p.pos + wall_normal * (m_particle_size - distance) * 1.001;
 
 		const double projected_v = p.v * wall_normal;
 		if (projected_v < 0)
@@ -455,8 +460,8 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 {
 	{
 		const vec2 size_sum = (a.m_rect.half_size + b.m_rect.half_size) * m_cell_proximity_factor;
-		const rect r{a.m_center_of_mass, size_sum};
-		if (r.is_inside_unordered(b.m_center_of_mass))
+		const rect r{a.m_rect.pos, size_sum};
+		if (r.is_inside_unordered(b.m_rect.pos)) [[unlikely]]
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
@@ -468,15 +473,7 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	const double distance = sqrt(distance_squared);
 	const vec2 unit_vec = ab / distance;
 
-	double f;
-	if (distance < m_particle_size)
-	{
-		f = collision_force(distance_squared);
-	}
-	else
-	{
-		f = gravitational_force(distance_squared);
-	}
+	const double f = gravitational_force(distance_squared);
 
 	a.m_a = a.m_a + unit_vec * f * b.m_num_particles;
 }

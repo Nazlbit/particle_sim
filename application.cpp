@@ -8,51 +8,11 @@ using namespace std::chrono_literals;
 
 void application::init()
 {
-	// struct winsize w;
-	// ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-	// m_screen_width = w.ws_col;
-	// m_screen_height = w.ws_row;
-
-	// // debug
-	// if (m_screen_width == 0 || m_screen_height == 0)
-	// {
-	// 	m_screen_width = 100;
-	// 	m_screen_height = 50;
-	// }
-
-	const double ratio = 1; //m_screen_width *char_ratio / m_screen_height;
+	const double ratio = 1;
 	m_sim_width = sim_size * ratio;
 	m_sim_height = sim_size;
-	//m_screen.reserve((m_screen_width + 1) * m_screen_height);
 
 	m_simulation = std::make_unique<simulation>(rect{vec2{0, 0}, vec2{m_sim_width, m_sim_height} * 0.5}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
-}
-
-void application::clear_screen()
-{
-	m_screen.assign((m_screen_width + 1) * m_screen_height, ' ');
-	for (uint32_t i = 0; i < m_screen_height; i++)
-	{
-		m_screen[(m_screen_width + 1) * i + m_screen_width] = '\n';
-	}
-	m_screen[(m_screen_width + 1) * m_screen_height - 1] = '\0';
-}
-
-void application::draw_quad_tree()
-{
-	clear_screen();
-	for (const vec2 &p : m_simulation->get_particles_pos())
-	{
-		const int x = (p.x / m_sim_width + 0.5) * m_screen_width;
-		const int y = (p.y / m_sim_height + 0.5) * m_screen_height;
-		if (x >= 0 && x < m_screen_width && y >= 0 && y < m_screen_height)
-		{
-			m_screen[(m_screen_width + 1) * y + x] = '#';
-		}
-	}
-
-	system("clear");
-	printf("%s", m_screen.data());
 }
 
 void application::generate_particles()
@@ -71,13 +31,21 @@ void application::generate_particles()
 
 void application::work()
 {
+	double dt = 0;
+	int n = 0;
 	while (true)
 	{
-		//const auto t1 = std::chrono::steady_clock::now();
+		const auto t1 = std::chrono::steady_clock::now();
 		m_simulation->progress();
-		//const auto t2 = std::chrono::steady_clock::now();
-		//const double dt = std::chrono::duration<double>(t2-t1).count();
-		//printf("dt:%f\n", dt);
+		const auto t2 = std::chrono::steady_clock::now();
+		dt += std::chrono::duration<double>(t2-t1).count();
+		++n;
+		if(dt >= 1)
+		{
+			printf("fps: %f\n", n/dt);
+			dt = 0;
+			n = 0;
+		}
 	}
 }
 
@@ -97,7 +65,7 @@ void application::run()
 									   "out vec4 FragColor;\n"
 									   "void main()\n"
 									   "{\n"
-									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.2f);\n"
+									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.1f);\n"
 									   "}\n\0";
 
 	unsigned int vertexShader = gl.CreateShader(GL_VERTEX_SHADER);
@@ -152,34 +120,23 @@ void application::run()
 	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
 	gl.EnableVertexAttribArray(0);
 
-	// note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-	//gl.BindBuffer(GL_ARRAY_BUFFER, 0);
-
-	// remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
-	// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-	// You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-	// VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-	//gl.BindVertexArray(0);
-
+	gl.PointSize(3);
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
+
 	init();
 	generate_particles();
 
 	std::thread worker([this]
 					   { work(); });
 
-	gl.PointSize(3);
 	while (!m_wnd.should_close())
 	{
 		window::poll_events();
 
 		gl.Clear(GL_COLOR_BUFFER_BIT);
 
-		//gl.UseProgram(shaderProgram);
-		//gl.BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
 		const std::vector<vec2> &particles = m_simulation->get_particles_pos();
 		for (size_t i = 0; i < num_particles; ++i)
 		{
@@ -194,24 +151,6 @@ void application::run()
 	gl.DeleteVertexArrays(1, &VAO);
 	gl.DeleteBuffers(1, &VBO);
 	gl.DeleteProgram(shaderProgram);
-
-	// init();
-	// generate_particles();
-
-	// std::thread worker([this]
-	// 					{ work(); });
-	// while (true)
-	// {
-	// 	const auto t1 = std::chrono::steady_clock::now();
-
-	// 	draw_quad_tree();
-
-	// 	const auto draw_time = std::chrono::steady_clock::now() - t1;
-
-	// 	const auto sleep_duration = 1000'000'000ns / fps - draw_time;
-
-	// 	std::this_thread::sleep_for(sleep_duration);
-	// }
 
 	// worker.join();
 }
