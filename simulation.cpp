@@ -224,6 +224,11 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_drag_factor(drag_factor),
 	m_cell_proximity_factor(cell_proximity_factor)
 {
+	m_walls.left = {m_root.m_rect.pos.x - m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
+	m_walls.right = {m_root.m_rect.pos.x + m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
+	m_walls.bottom = {m_root.m_rect.pos.x, m_root.m_rect.pos.y - m_root.m_rect.half_size.y};
+	m_walls.top = {m_root.m_rect.pos.x, m_root.m_rect.pos.y + m_root.m_rect.half_size.y};
+
 	for (auto &worker : m_workers)
 	{
 		worker = std::thread([this] {
@@ -381,10 +386,10 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, {m_root.m_rect.pos.x - m_root.m_rect.half_size.x, m_root.m_rect.pos.y}, {1, 0});
-				simple_wall(p1, {m_root.m_rect.pos.x + m_root.m_rect.half_size.x, m_root.m_rect.pos.y}, {-1, 0});
-				simple_wall(p1, {m_root.m_rect.pos.x, m_root.m_rect.pos.y - m_root.m_rect.half_size.y}, {0, 1});
-				simple_wall(p1, {m_root.m_rect.pos.x, m_root.m_rect.pos.y + m_root.m_rect.half_size.y}, {0, -1});
+				simple_wall(p1, m_walls.left, {1, 0});
+				simple_wall(p1, m_walls.right, {-1, 0});
+				simple_wall(p1, m_walls.bottom, {0, 1});
+				simple_wall(p1, m_walls.top, {0, -1});
 
 				p1.a = {};
 			}

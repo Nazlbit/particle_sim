@@ -77,6 +77,10 @@ private:
 	double m_collision_max_force;
 	double m_drag_factor;
 	double m_cell_proximity_factor;
+	struct
+	{
+		vec2 left, right, bottom, top;
+	} m_walls;
 
 	void reset_leafs_iterator();
 
