@@ -16,7 +16,7 @@ private:
 	static constexpr double wall_collision_cor = 0.;
 	static constexpr double generation_scale = 0.25;
 	static constexpr size_t num_threads = 7;
-	static constexpr double cell_proximity_factor = 1.5;
+	static constexpr double cell_proximity_factor = 1.01;
 	static constexpr int fps = 20;
 	static constexpr double char_ratio = 0.47;
 

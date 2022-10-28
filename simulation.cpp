@@ -478,8 +478,8 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 {
 	{
 		const vec2 size_sum = (a.m_rect.half_size + b.m_rect.half_size) * m_cell_proximity_factor;
-		const rect r{a.m_center_of_mass, size_sum};
-		if (r.is_inside_unordered(b.m_center_of_mass))
+		const rect r{a.m_rect.pos, size_sum};
+		if (r.is_inside_unordered(b.m_rect.pos))
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
