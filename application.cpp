@@ -41,10 +41,10 @@ void application::clear_screen()
 void application::draw_quad_tree()
 {
 	clear_screen();
-	for (const particle &p : m_simulation->get_particles())
+	for (const vec2 &p : m_simulation->get_particles_positions())
 	{
-		const int x = (p.pos.x / m_sim_width + 0.5) * m_screen_width;
-		const int y = (p.pos.y / m_sim_height + 0.5) * m_screen_height;
+		const int x = (p.x / m_sim_width + 0.5) * m_screen_width;
+		const int y = (p.y / m_sim_height + 0.5) * m_screen_height;
 		if (x >= 0 && x < m_screen_width && y >= 0 && y < m_screen_height)
 		{
 			m_screen[(m_screen_width + 1) * y + x] = '#';

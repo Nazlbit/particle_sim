@@ -6,6 +6,8 @@
 #include <shared_mutex>
 #include <condition_variable>
 #include <thread>
+#include <array>
+
 #include "math.hpp"
 #include "barrier.hpp"
 
@@ -48,14 +50,17 @@ private:
 
 		void find_leafs(std::vector<cell *> &cells);
 
-		void find_particles(std::vector<particle> &particles) const;
+		void get_particles(std::vector<particle> &particles) const;
+
+		void get_particles_positions(std::vector<vec2> &particles) const;
 
 		void calculate_center_of_mass();
 	};
 
 	cell m_root;
     mutable std::mutex m_particles_mutex;
-    mutable std::vector<particle> m_all_particles[3];
+	static constexpr uint8_t m_particles_buffer_num = 3;
+	mutable std::array<std::vector<vec2>, m_particles_buffer_num> m_particles_positions;
 	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
     std::vector<std::thread> m_workers;
@@ -100,7 +105,7 @@ public:
 
 	~simulation();
 
-	const std::vector<particle> &get_particles() const;
+	const std::vector<vec2> &get_particles_positions() const;
 
 	void progress();
 
