@@ -215,7 +215,7 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_barrier(num_threads, [this] {
 		reset_leafs_iterator();
 	}),
-	m_barrier_end(num_threads, [this] {
+	m_barrier_start(num_threads + 1, [this] {
 		reset_leafs_iterator();
 		stop_workers();
 	}),
@@ -248,15 +248,14 @@ simulation::~simulation()
 	}
 }
 
-void simulation::reset_leafs_iterator()
+inline void simulation::reset_leafs_iterator()
 {
 	m_leafs_iterator = 0;
 }
 
-void simulation::stop_workers()
+inline void simulation::stop_workers()
 {
 	m_workers_awake = false;
-	m_head_workers_cv.notify_one();
 }
 
 const std::vector<vec2> &simulation::get_particles_positions() const
@@ -281,9 +280,10 @@ void simulation::progress()
 	// const auto t2 = std::chrono::steady_clock::now();
 
 	m_workers_awake = true;
+	lock.unlock();
 	m_head_workers_cv.notify_all();
-	m_head_workers_cv.wait(lock, [this]
-						   { return !m_workers_awake; });
+	m_barrier_start.wait();
+	lock.lock();
 
 	// const auto t3 = std::chrono::steady_clock::now();
 
@@ -329,6 +329,8 @@ void simulation::calculate_physics()
 	{
 		m_head_workers_cv.wait(lock, [this]
 							   { return m_workers_awake; });
+
+		m_barrier_start.wait();
 
 		const size_t num = m_leafs.size();
 
@@ -397,7 +399,6 @@ void simulation::calculate_physics()
 				p1.a = {};
 			}
 		}
-		m_barrier_end.wait();
 	}
 }
 
