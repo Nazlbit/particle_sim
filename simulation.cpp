@@ -159,20 +159,40 @@ void simulation::cell::find_leafs(std::vector<cell *> &cells)
 	}
 }
 
-void simulation::cell::find_particles_pos(std::vector<vec2> &particles) const
+void simulation::cell::get_particles(std::vector<particle> &particles) const
 {
 	if (!m_children.empty())
 	{
 		for (const cell &child : m_children)
 		{
-			child.find_particles_pos(particles);
+			child.get_particles(particles);
 		}
 	}
 	else
 	{
 		for(const particle &p : m_particles)
 		{
-			particles.push_back(p.pos);
+			particles.push_back(p);
+		}
+	}
+}
+
+void simulation::cell::get_particles_positions(std::vector<vec2> &particles) const
+{
+	if (!m_children.empty())
+	{
+		for (const cell &child : m_children)
+		{
+			child.get_particles_positions(particles);
+		}
+	}
+	else
+	{
+		auto it = particles.end();
+		particles.resize(particles.size() + m_particles.size());
+		for (const particle &p : m_particles)
+		{
+			*(it++) = p.pos;
 		}
 	}
 }
@@ -239,15 +259,15 @@ void simulation::stop_workers()
 	m_head_workers_cv.notify_one();
 }
 
-const std::vector<vec2> &simulation::get_particles_pos() const
+const std::vector<vec2> &simulation::get_particles_positions() const
 {
 	std::lock_guard lock(m_particles_mutex);
 	if(m_swap_buffers)
 	{
-		m_all_particles[0].swap(m_all_particles[1]);
+		m_particles_positions[0].swap(m_particles_positions[1]);
 		m_swap_buffers = false;
 	}
-	return m_all_particles[0];
+	return m_particles_positions[0];
 }
 
 void simulation::progress()
@@ -272,8 +292,9 @@ void simulation::progress()
 
 	// const auto t4 = std::chrono::steady_clock::now();
 
-	m_all_particles[2].clear();
-	m_root.find_particles_pos(m_all_particles[2]);
+	m_particles_positions[2].clear();
+	m_particles_positions[2].reserve(m_root.m_num_particles);
+	m_root.get_particles_positions(m_particles_positions[2]);
 
 	// const auto t5 = std::chrono::steady_clock::now();
 
@@ -289,7 +310,7 @@ void simulation::progress()
 
 	{
 		std::lock_guard lock(m_particles_mutex);
-		m_all_particles[2].swap(m_all_particles[1]);
+		m_particles_positions[2].swap(m_particles_positions[1]);
 		m_swap_buffers = true;
 	}
 }
@@ -297,7 +318,7 @@ void simulation::progress()
 void simulation::add(const particle &p)
 {
 	m_root.add(p);
-	m_all_particles[0].push_back(p.pos);
+	m_particles_positions[0].push_back(p.pos);
 }
 
 void simulation::calculate_physics()
@@ -461,7 +482,7 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	{
 		const vec2 size_sum = (a.m_rect.half_size + b.m_rect.half_size) * m_cell_proximity_factor;
 		const rect r{a.m_rect.pos, size_sum};
-		if (r.is_inside_unordered(b.m_rect.pos)) [[unlikely]]
+		if (r.is_inside_unordered(b.m_rect.pos))
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
@@ -470,6 +491,11 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 
 	const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
 	const double distance_squared = ab * ab;
+	if(!std::isnormal(distance_squared)) [[unlikely]]
+	{
+		return;
+	}
+
 	const double distance = sqrt(distance_squared);
 	const vec2 unit_vec = ab / distance;
 

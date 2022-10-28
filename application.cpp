@@ -137,7 +137,7 @@ void application::run()
 
 		gl.Clear(GL_COLOR_BUFFER_BIT);
 
-		const std::vector<vec2> &particles = m_simulation->get_particles_pos();
+		const std::vector<vec2> &particles = m_simulation->get_particles_positions();
 		for (size_t i = 0; i < num_particles; ++i)
 		{
 			points[i] = particles[i] / (sim_size * 0.5);
