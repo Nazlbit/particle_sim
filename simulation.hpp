@@ -69,7 +69,7 @@ private:
     std::condition_variable_any m_head_workers_cv;
     bool m_workers_awake = false;
 	barrier m_barrier;
-	barrier m_barrier_end;
+	barrier m_barrier_start;
 	double m_dt;
 	double m_particle_size;
 	double m_g_const;
