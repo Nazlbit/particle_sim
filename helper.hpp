@@ -3,15 +3,32 @@
 #include <cassert>
 #include "exception.hpp"
 
-#define ERROR(msg, ...) fprintf(stderr, "ERROR: " msg "\n", ##__VA_ARGS__)
+#define ERROR(msg, ...) std::fprintf(stderr, "ERROR: " msg "\n", ##__VA_ARGS__)
 
-#define WARNING(msg, ...) fprintf(stdout, "WARNING: " msg "\n", ##__VA_ARGS__)
+#define WARNING(msg, ...) std::fprintf(stdout, "WARNING: " msg "\n", ##__VA_ARGS__)
 
-#define INFO(msg, ...) fprintf(stdout, "INFO: " msg "\n", ##__VA_ARGS__)
+#define INFO(msg, ...) std::fprintf(stdout, "INFO: " msg "\n", ##__VA_ARGS__)
 
-#define THROW(msg) throw exception(msg)
+#define THROW(msg) throw exception(msg);
 
-#define ASSERT_EX_M(expr, msg) (expr ? void(0) : THROW(msg))
+#define THROW_PRINTF(msg, ...)                                                   \
+	{                                                                            \
+		char built_msg[exception::msg_size_limit];                               \
+		std::snprintf(built_msg, exception::msg_size_limit, msg, ##__VA_ARGS__); \
+		throw exception(built_msg);                                              \
+	}
+
+#define ASSERT_EX_M(expr, msg) \
+	if (!expr)                 \
+	{                          \
+		THROW(msg);            \
+	}
+
+#define ASSERT_EX_M_PRINTF(expr, msg, ...) \
+	if (!expr)                             \
+	{                                      \
+		THROW_PRINTF(msg, ##__VA_ARGS__);  \
+	}
 
 #define S1(x) #x
 #define S2(x) S1(x)
@@ -21,11 +38,11 @@
 
 #define DEBUG_ASSERT(expr) assert(expr)
 
-#define CRITICAL_ASSERT_M(expr, msg) \
-	if (!expr)                       \
-	{                                \
-		ERROR(msg);                  \
-		exit(-1);                    \
+#define CRITICAL_ASSERT_M(expr, msg, ...) \
+	if (!expr)                            \
+	{                                     \
+		ERROR(msg, ##__VA_ARGS__);        \
+		exit(-1);                         \
 	}
 
 #define CRITICAL_ASSERT(expr) CRITICAL_ASSERT_M(expr, "Critical assertion failure in " LOCATION ". Expression: " #expr)

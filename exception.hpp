@@ -8,8 +8,7 @@ class exception : public std::exception
 public:
 	exception(const char *const msg) noexcept
 	{
-		std::strncpy(m_msg, msg, msg_size_limit);
-		m_msg[msg_size_limit - 1] = '\0';
+		std::snprintf(m_msg, msg_size_limit, "%s", msg);
 	}
 
 	virtual const char *what() const noexcept override
@@ -17,7 +16,8 @@ public:
 		return m_msg;
 	}
 
-private:
 	static constexpr uint16_t msg_size_limit = 128;
+
+private:
 	char m_msg[msg_size_limit];
 };
