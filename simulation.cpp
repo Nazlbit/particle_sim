@@ -488,18 +488,15 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 
 	const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
 	const double distance_squared = ab * ab;
+	if(!std::isnormal(distance_squared)) [[unlikely]]
+	{
+		return;
+	}
+
 	const double distance = sqrt(distance_squared);
 	const vec2 unit_vec = ab / distance;
 
-	double f;
-	if (distance < m_particle_size)
-	{
-		f = collision_force(distance_squared);
-	}
-	else
-	{
-		f = gravitational_force(distance_squared);
-	}
+	double f = gravitational_force(distance_squared);
 
 	a.m_a = a.m_a + unit_vec * f * b.m_num_particles;
 }
