@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdio>
 #include <cassert>
+#include <cstdlib>
 #include "exception.hpp"
 
 #define ERROR(msg, ...) std::fprintf(stderr, "ERROR: " msg "\n", ##__VA_ARGS__)

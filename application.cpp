@@ -116,7 +116,6 @@ void application::run()
 
 	gl.BindBuffer(GL_ARRAY_BUFFER, VBO);
 	gl.BufferData(GL_ARRAY_BUFFER, sizeof(vec2_f) * num_particles, nullptr, GL_DYNAMIC_DRAW);
-	vec2_f *points = static_cast<vec2_f *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
 
 	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
 	gl.EnableVertexAttribArray(0);
@@ -138,6 +137,7 @@ void application::run()
 
 		gl.Clear(GL_COLOR_BUFFER_BIT);
 
+		vec2_f *points = static_cast<vec2_f *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
 		const std::vector<vec2> &particles = m_simulation->get_particles_positions();
 		for (size_t i = 0; i < num_particles; ++i)
 		{
@@ -146,12 +146,13 @@ void application::run()
 			screen_coords.y = screen_coords.y / m_sim_height * 2;
 			points[i] = screen_coords;
 		}
+		gl.UnmapBuffer(GL_ARRAY_BUFFER);
+
 		gl.DrawArrays(GL_POINTS, 0, num_particles);
 
 		m_wnd.swap_buffers();
 	}
 
-	gl.UnmapBuffer(GL_ARRAY_BUFFER);
 	gl.DeleteVertexArrays(1, &VAO);
 	gl.DeleteBuffers(1, &VBO);
 	gl.DeleteProgram(shaderProgram);
