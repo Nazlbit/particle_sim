@@ -8,7 +8,8 @@ using namespace std::chrono_literals;
 
 void application::init()
 {
-	const double ratio = 1;
+	const window::dimensions wnd_size = m_wnd.get_size();
+	const double ratio = (double)wnd_size.width / wnd_size.height;
 	m_sim_width = sim_size * ratio;
 	m_sim_height = sim_size;
 
@@ -51,7 +52,7 @@ void application::work()
 
 void application::run()
 {
-	m_wnd = window("particle_sim", 1300, 1300);
+	m_wnd = window("particle_sim", 0, 0, true);
 
 	const GladGLContext &gl = m_wnd.gl();
 
@@ -140,7 +141,10 @@ void application::run()
 		const std::vector<vec2> &particles = m_simulation->get_particles_positions();
 		for (size_t i = 0; i < num_particles; ++i)
 		{
-			points[i] = particles[i] / (sim_size * 0.5);
+			vec2 screen_coords = particles[i];
+			screen_coords.x = screen_coords.x / m_sim_width * 2;
+			screen_coords.y = screen_coords.y / m_sim_height * 2;
+			points[i] = screen_coords;
 		}
 		gl.DrawArrays(GL_POINTS, 0, num_particles);
 

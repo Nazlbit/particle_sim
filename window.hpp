@@ -3,14 +3,21 @@
 
 class window
 {
+public:
+	struct dimensions
+	{
+		int width = 0, height = 0;
+	};
+
 private:
 	GLFWwindow *m_wnd = nullptr;
 	GladGLContext m_gl{};
+	dimensions m_size;
 
 public:
 	window() = default;
 
-	window(const char *title, int width, int height);
+	window(const char *title, const int width, const int height, const bool fullscreen);
 
 	window(window &&wnd);
 
@@ -41,5 +48,10 @@ public:
 	static void poll_events()
 	{
 		glfwPollEvents();
+	}
+
+	dimensions get_size() const
+	{
+		return m_size;
 	}
 };
