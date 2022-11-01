@@ -14,12 +14,13 @@ void simulation::cell::subdivide()
 	static int i = 0;
 	i++;
 	assert(m_children.empty());
-	const vec2 cell_size = m_rect.half_size * 0.5;
 
-	m_children.emplace_back(this, rect{{m_rect.pos.x - cell_size.x, m_rect.pos.y - cell_size.y}, cell_size}, m_particles_limit); // left bottom
-	m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y - cell_size.y}, cell_size}, m_particles_limit); // right bottom
-	m_children.emplace_back(this, rect{{m_rect.pos.x - cell_size.x, m_rect.pos.y + cell_size.y}, cell_size}, m_particles_limit); // left top
-	m_children.emplace_back(this, rect{{m_rect.pos.x + cell_size.x, m_rect.pos.y + cell_size.y}, cell_size}, m_particles_limit); // right top
+	const vec2 center = m_rect.center();
+
+	m_children.emplace_back(this, rect{m_rect.bottom_left, center}, m_particles_limit); // bottom-left
+	m_children.emplace_back(this, rect{{center.x, m_rect.bottom_left.y}, {m_rect.top_right.x, center.y}}, m_particles_limit); // bottom-right
+	m_children.emplace_back(this, rect{{m_rect.bottom_left.x, center.y}, {center.x, m_rect.top_right.y}}, m_particles_limit); // top-left
+	m_children.emplace_back(this, rect{center, m_rect.top_right}, m_particles_limit); // top-right
 
 	m_num_particles = 0;
 	for (const particle &p : m_particles)
@@ -58,11 +59,11 @@ void simulation::cell::add(const particle &p)
 	}
 	else
 	{
-		const vec2 cell_size = m_rect.half_size * 0.5;
+		const vec2 center = m_rect.center();
 
-		if (p.pos.y < m_rect.pos.y)
+		if (p.pos.y < center.y)
 		{
-			if (p.pos.x < m_rect.pos.x)
+			if (p.pos.x < center.x)
 			{
 				m_children[0].add(p);
 			}
@@ -73,7 +74,7 @@ void simulation::cell::add(const particle &p)
 		}
 		else
 		{
-			if (p.pos.x < m_rect.pos.x)
+			if (p.pos.x < center.x)
 			{
 				m_children[2].add(p);
 			}
@@ -224,11 +225,6 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_drag_factor(drag_factor),
 	m_cell_proximity_factor(cell_proximity_factor)
 {
-	m_walls.left = {m_root.m_rect.pos.x - m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
-	m_walls.right = {m_root.m_rect.pos.x + m_root.m_rect.half_size.x, m_root.m_rect.pos.y};
-	m_walls.bottom = {m_root.m_rect.pos.x, m_root.m_rect.pos.y - m_root.m_rect.half_size.y};
-	m_walls.top = {m_root.m_rect.pos.x, m_root.m_rect.pos.y + m_root.m_rect.half_size.y};
-
 	for (auto &worker : m_workers)
 	{
 		worker = std::thread([this] {
@@ -388,10 +384,10 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, m_walls.left, {1, 0});
-				simple_wall(p1, m_walls.right, {-1, 0});
-				simple_wall(p1, m_walls.bottom, {0, 1});
-				simple_wall(p1, m_walls.top, {0, -1});
+				simple_wall(p1, m_root.m_rect.bottom_left, {1, 0});
+				simple_wall(p1, m_root.m_rect.bottom_left, {0, 1});
+				simple_wall(p1, m_root.m_rect.top_right, {-1, 0});
+				simple_wall(p1, m_root.m_rect.top_right, {0, -1});
 
 				p1.a = {};
 			}
@@ -478,9 +474,9 @@ inline double simulation::gravitational_force(const double distance_squared) con
 void simulation::cell_pair_interaction(cell &a, const cell &b)
 {
 	{
-		const vec2 size_sum = (a.m_rect.half_size + b.m_rect.half_size) * m_cell_proximity_factor;
-		const rect r{a.m_rect.pos, size_sum};
-		if (r.is_inside_unordered(b.m_rect.pos))
+		const vec2 half_size_sum = (a.m_rect.size() + b.m_rect.size()) * (0.5 * m_cell_proximity_factor);
+		const vec2 r = b.m_rect.center() - a.m_rect.center();
+		if (r.x < half_size_sum.x && r.x > -half_size_sum.x && r.y < half_size_sum.y && r.y > -half_size_sum.y)
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
