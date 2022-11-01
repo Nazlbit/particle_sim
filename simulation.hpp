@@ -23,7 +23,7 @@ class simulation
 private:
     struct cell
     {
-		static constexpr uint8_t m_num_children = 4;
+		static constexpr uint8_t m_num_children = 2;
 
 		const size_t m_particles_limit;
 		cell *const m_parent = nullptr;

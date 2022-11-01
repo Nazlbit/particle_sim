@@ -15,12 +15,19 @@ void simulation::cell::subdivide()
 	i++;
 	assert(m_children.empty());
 
-	const vec2 center = m_rect.center();
-
-	m_children.emplace_back(this, rect{m_rect.bottom_left, center}, m_particles_limit); // bottom-left
-	m_children.emplace_back(this, rect{{center.x, m_rect.bottom_left.y}, {m_rect.top_right.x, center.y}}, m_particles_limit); // bottom-right
-	m_children.emplace_back(this, rect{{m_rect.bottom_left.x, center.y}, {center.x, m_rect.top_right.y}}, m_particles_limit); // top-left
-	m_children.emplace_back(this, rect{center, m_rect.top_right}, m_particles_limit); // top-right
+	const vec2 size = m_rect.size();
+	if(size.x > size.y)
+	{
+		const double center = (m_rect.bottom_left.x + m_rect.top_right.x) * 0.5;
+		m_children.emplace_back(this, rect{m_rect.bottom_left, {center, m_rect.top_right.y}}, m_particles_limit);
+		m_children.emplace_back(this, rect{{center, m_rect.bottom_left.y}, m_rect.top_right}, m_particles_limit);
+	}
+	else
+	{
+		const double center = (m_rect.bottom_left.y + m_rect.top_right.y) * 0.5;
+		m_children.emplace_back(this, rect{m_rect.bottom_left, {m_rect.top_right.x, center}}, m_particles_limit);
+		m_children.emplace_back(this, rect{{m_rect.bottom_left.x, center}, m_rect.top_right}, m_particles_limit);
+	}
 
 	m_num_particles = 0;
 	for (const particle &p : m_particles)
@@ -59,11 +66,10 @@ void simulation::cell::add(const particle &p)
 	}
 	else
 	{
-		const vec2 center = m_rect.center();
-
-		if (p.pos.y < center.y)
+		const vec2 size = m_rect.size();
+		if (size.x > size.y)
 		{
-			if (p.pos.x < center.x)
+			if (p.pos.x < (m_rect.bottom_left.x + m_rect.top_right.x) * 0.5)
 			{
 				m_children[0].add(p);
 			}
@@ -74,13 +80,13 @@ void simulation::cell::add(const particle &p)
 		}
 		else
 		{
-			if (p.pos.x < center.x)
+			if (p.pos.y < (m_rect.bottom_left.y + m_rect.top_right.y) * 0.5)
 			{
-				m_children[2].add(p);
+				m_children[0].add(p);
 			}
 			else
 			{
-				m_children[3].add(p);
+				m_children[1].add(p);
 			}
 		}
 	}
