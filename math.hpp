@@ -15,6 +15,11 @@ struct vec2
 		return {x - b.x, y - b.y};
 	}
 
+	vec2 operator-() const
+	{
+		return {-x, -y};
+	}
+
 	double operator*(vec2 b) const
 	{
 		return x * b.x + y * b.y;
@@ -47,27 +52,35 @@ struct vec2_f
 
 struct rect
 {
-    vec2 pos;
-    vec2 half_size;
+    vec2 bottom_left;
+    vec2 top_right;
 
     bool is_inside_ordered(const vec2 &p) const
     {
-		assert(half_size.x > 0);
-		assert(half_size.y > 0);
+		assert(bottom_left.x < top_right.x);
+		assert(bottom_left.y < top_right.y);
 
-		const vec2 r = p - pos;
-		return r.x <= half_size.x && -half_size.x < r.x &&
-			   r.y <= half_size.y && -half_size.y < r.y;
+		return bottom_left.x <= p.x && bottom_left.y <= p.y &&
+			   p.x < top_right.x && p.y < top_right.y;
 	}
 
 	bool is_inside_unordered(const vec2 &p) const
 	{
-		assert(half_size.x > 0);
-		assert(half_size.y > 0);
+		assert(bottom_left.x < top_right.x);
+		assert(bottom_left.y < top_right.y);
 
-		const vec2 r = p - pos;
-		return r.x <= half_size.x && -half_size.x <= r.x &&
-			   r.y <= half_size.y && -half_size.y <= r.y;
+		return bottom_left.x <= p.x && bottom_left.y <= p.y &&
+			   p.x <= top_right.x && p.y <= top_right.y;
+	}
+
+	vec2 center() const
+	{
+		return (bottom_left + top_right) * 0.5;
+	}
+
+	vec2 size() const
+	{
+		return top_right - bottom_left;
 	}
 };
 

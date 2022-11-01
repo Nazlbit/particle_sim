@@ -13,7 +13,9 @@ void application::init()
 	m_sim_width = sim_size * ratio;
 	m_sim_height = sim_size;
 
-	m_simulation = std::make_unique<simulation>(rect{vec2{0, 0}, vec2{m_sim_width, m_sim_height} * 0.5}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
+	const vec2 half_sim_size = vec2{m_sim_width, m_sim_height} * 0.5;
+
+	m_simulation = std::make_unique<simulation>(rect{-half_sim_size, half_sim_size}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
 }
 
 void application::generate_particles()
@@ -41,9 +43,9 @@ void application::work()
 		const auto t2 = std::chrono::steady_clock::now();
 		dt += std::chrono::duration<double>(t2-t1).count();
 		++n;
-		if(dt >= 1)
+		if(dt >= 60)
 		{
-			printf("fps: %f\n", n/dt);
+			printf("Average fps in 60s: %f\n", n/dt);
 			dt = 0;
 			n = 0;
 		}
