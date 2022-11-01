@@ -43,9 +43,9 @@ void application::work()
 		const auto t2 = std::chrono::steady_clock::now();
 		dt += std::chrono::duration<double>(t2-t1).count();
 		++n;
-		if(dt >= 60)
+		if(dt >= 1)
 		{
-			printf("Average fps in 60s: %f\n", n/dt);
+			printf("FPS: %f\n", n/dt);
 			dt = 0;
 			n = 0;
 		}
