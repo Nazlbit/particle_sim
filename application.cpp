@@ -51,7 +51,7 @@ void application::work()
 {
 	double dt = 0;
 	int n = 0;
-	while (true)
+	while (m_worker_active)
 	{
 		const auto t1 = std::chrono::steady_clock::now();
 		m_simulation->progress();
@@ -170,9 +170,10 @@ void application::run()
 		m_wnd.swap_buffers();
 	}
 
+	m_worker_active = false;
+	worker.join();
+
 	gl.DeleteVertexArrays(1, &VAO);
 	gl.DeleteBuffers(1, &VBO);
 	gl.DeleteProgram(shaderProgram);
-
-	// worker.join();
 }

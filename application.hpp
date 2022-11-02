@@ -1,7 +1,7 @@
 #pragma once
+#include <atomic>
 #include "simulation.hpp"
 #include "window.hpp"
-
 class application
 {
 private:
@@ -23,8 +23,8 @@ private:
 	std::unique_ptr<simulation> m_simulation;
 
 	double m_sim_width, m_sim_height;
-
 	window m_wnd;
+	std::atomic_bool m_worker_active = true;
 
 	void init();
 	void generate_particles();

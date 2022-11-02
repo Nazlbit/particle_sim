@@ -243,6 +243,9 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt,
 
 simulation::~simulation()
 {
+	alive = false;
+	m_head_workers_cv.notify_all();
+
 	for (auto &worker : m_workers)
 	{
 		worker.join();
@@ -329,7 +332,11 @@ void simulation::calculate_physics()
 	while (true)
 	{
 		m_head_workers_cv.wait(lock, [this]
-							   { return m_workers_awake; });
+							   { return m_workers_awake | !alive; });
+		if(!alive)
+		{
+			return;
+		}
 
 		m_barrier_start.wait();
 

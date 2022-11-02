@@ -78,6 +78,7 @@ private:
 	double m_drag_factor;
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
+	std::atomic_bool alive = true;
 
 	void reset_leafs_iterator();
 
