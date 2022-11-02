@@ -72,6 +72,7 @@ private:
 	barrier m_barrier;
 	barrier m_barrier_start;
 	double m_dt;
+	double m_particle_size;
 	double m_g_const;
 	double m_wall_collision_cor;
 	double m_collision_max_force;
@@ -101,7 +102,7 @@ private:
 	double gravitational_force(const double &m1, const double &m2, const double &distance_squared) const;
 
 public:
-	simulation(const rect r, const size_t num_threads, const double dt,
+	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
 			   const double g_const, const double wall_collision_cor, const double collision_max_force,
 			   const double drag_factor, const size_t cell_particles_limit, const double cell_proximity_factor);
 
