@@ -112,4 +112,14 @@ public:
 	void progress();
 
 	void add(const particle &p);
+
+	rect get_sim_rect() const
+	{
+		return m_root.m_rect;
+	}
+
+	size_t get_num_particles() const
+	{
+		return m_root.m_num_particles;
+	}
 };

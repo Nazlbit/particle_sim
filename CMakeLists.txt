@@ -1,8 +1,23 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(particles VERSION 0.1.0)
 
-set(SRC_FILES main.cpp math.cpp simulation.cpp application.cpp window.cpp glfw_singleton.cpp)
-set(HEADER_FILES application.hpp barrier.hpp exception.hpp glfw_singleton.hpp helper.hpp math.hpp simulation.hpp window.hpp)
+set(SRC_FILES main.cpp
+              math.cpp
+			  simulation.cpp
+			  application.cpp
+			  window.cpp
+			  glfw_singleton.cpp
+			  particle_renderer.cpp)
+
+set(HEADER_FILES application.hpp
+                 barrier.hpp
+				 exception.hpp
+				 glfw_singleton.hpp
+				 helper.hpp
+				 math.hpp
+				 simulation.hpp
+				 window.hpp
+				 particle_renderer.hpp)
 
 add_executable(particles ${SRC_FILES} ${HEADER_FILES})
 

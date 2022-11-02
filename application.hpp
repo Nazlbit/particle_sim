@@ -1,16 +1,19 @@
 #pragma once
 #include <atomic>
+
 #include "simulation.hpp"
 #include "window.hpp"
+#include "particle_renderer.hpp"
+
 class application
 {
 private:
 	static constexpr double sim_size = 200.;
 	static constexpr double g_const = 0.02;
-	static constexpr double particle_size = 1.;
+	static constexpr double particle_size = 0.5;
 	static constexpr double dt = 0.0025;
 	static constexpr double drag_factor = 0.02;
-	static constexpr double collision_max_force = 10;
+	static constexpr double collision_max_force = 20;
 	static constexpr double initial_velocity_factor = 0.05;
 	static constexpr size_t num_particles = 32000;
 	static constexpr size_t cell_particles_limit = 32;
@@ -21,15 +24,19 @@ private:
 
 	/* I don't want to make it DefaultConstructible because I'm lazy. */
 	std::unique_ptr<simulation> m_simulation;
-
 	double m_sim_width, m_sim_height;
 	window m_wnd;
 	std::atomic_bool m_worker_active = true;
+	particle_renderer m_renderer;
+	std::thread m_worker;
 
 	void init();
 	void generate_particles();
 	void work();
 
 public:
+	application();
+	~application();
+
 	void run();
 };
