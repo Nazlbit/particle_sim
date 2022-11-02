@@ -9,9 +9,9 @@ private:
 	static constexpr double g_const = 0.02;
 	static constexpr double particle_size = 1.;
 	static constexpr double dt = 0.0025;
-	static constexpr double drag_factor = 0.005;
-	static constexpr double collision_max_force = 0.1;
-	static constexpr double initial_velocity_factor = 0.02;
+	static constexpr double drag_factor = 0.02;
+	static constexpr double collision_max_force = 10;
+	static constexpr double initial_velocity_factor = 0.05;
 	static constexpr size_t num_particles = 32000;
 	static constexpr size_t cell_particles_limit = 32;
 	static constexpr double wall_collision_cor = 0.;

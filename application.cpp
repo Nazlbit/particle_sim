@@ -20,7 +20,7 @@ void application::init()
 
 void application::generate_particles()
 {
-	for (size_t i = 0; i < num_particles; ++i)
+	for (size_t i = 0; i < num_particles - 2; ++i)
 	{
 		particle p;
 		p.pos = {random_double(-0.5, 0.5) * m_sim_width, random_double(-0.5, 0.5) * m_sim_height};
@@ -28,6 +28,21 @@ void application::generate_particles()
 
 		p.v = vec2{p.pos.y, -p.pos.x} * initial_velocity_factor;
 
+		p.m = 1;
+		p.size = particle_size;
+		m_simulation->add(p);
+	}
+
+	for (size_t i = 0; i < 2; ++i)
+	{
+		particle p;
+		p.pos = {random_double(-0.5, 0.5) * m_sim_width, random_double(-0.5, 0.5) * m_sim_height};
+		p.pos = p.pos * generation_scale;
+
+		p.v = vec2{p.pos.y, -p.pos.x} * initial_velocity_factor;
+
+		p.m = 10000;
+		p.size = particle_size * 10;
 		m_simulation->add(p);
 	}
 }
@@ -68,7 +83,7 @@ void application::run()
 									   "out vec4 FragColor;\n"
 									   "void main()\n"
 									   "{\n"
-									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.01f);\n"
+									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.025f);\n"
 									   "}\n\0";
 
 	unsigned int vertexShader = gl.CreateShader(GL_VERTEX_SHADER);

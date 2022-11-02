@@ -205,11 +205,13 @@ void simulation::cell::get_particles_positions(std::vector<vec2> &particles) con
 void simulation::cell::calculate_center_of_mass()
 {
 	m_center_of_mass = {};
+	m_total_mass = 0;
 	for (const particle &p : m_particles)
 	{
-		m_center_of_mass = m_center_of_mass + p.pos;
+		m_center_of_mass = m_center_of_mass + p.pos * p.m;
+		m_total_mass += p.m;
 	};
-	m_center_of_mass = m_center_of_mass / m_num_particles;
+	m_center_of_mass = m_center_of_mass / m_total_mass;
 }
 
 simulation::simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
@@ -406,10 +408,9 @@ void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
 {
 	const vec2 r_vec = p.pos - wall_pos;
 	const double distance = r_vec * wall_normal;
-	const double r = m_particle_size * 0.5;
-	if (distance < r) [[unlikely]]
+	if (distance < 0) [[unlikely]]
 	{
-		p.pos = p.pos + wall_normal * (m_particle_size - distance) * 1.001;
+		p.pos = p.pos - wall_normal * distance * 1.001;
 
 		const double projected_v = p.v * wall_normal;
 		if (projected_v < 0)
@@ -422,13 +423,13 @@ void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
 void simulation::particle_pair_interaction_local(particle &a, particle &b)
 {
 	const vec2 f = particle_pair_interaction(a, b);
-	a.a = a.a + f;
-	b.a = b.a - f;
+	a.a = a.a + (f / a.m);
+	b.a = b.a - (f / b.m);
 }
 
 void simulation::particle_pair_interaction_global(particle &a, const particle &b)
 {
-	a.a = a.a + particle_pair_interaction(a, b);
+	a.a = a.a + (particle_pair_interaction(a, b) / a.m);
 }
 
 vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
@@ -445,10 +446,11 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 
 	double f;
 
-	if (distance < m_particle_size)
+	const double collision_distance = (a.size + b.size) * 0.5;
+	if (distance < collision_distance)
 	{
 		/* Collision */
-		f = collision_force(distance_squared);
+		f = collision_force(collision_distance, distance_squared, a.m, b.m);
 
 		/* Drag */
 		const double relative_v = (b.v - a.v) * unit_vec;
@@ -458,24 +460,25 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 	else
 	{
 		/* Gravity */
-		f = gravitational_force(distance_squared);
+		f = gravitational_force(a.m, b.m, distance_squared);
 	}
 
 	/* Assume that mass is equal to 1 */
 	return unit_vec * f;
 }
 
-inline double simulation::collision_force(const double distance_squared) const
+inline double simulation::collision_force(const double &collision_distance, const double &distance_squared, const double &m1, const double &m2) const
 {
-	const double diameter_squared = m_particle_size * m_particle_size;
+	const double m_squared = m1 * m2;
+	const double diameter_squared = collision_distance * collision_distance;
 	const double gravity_at_diameter = m_g_const / diameter_squared;
-	const double q = 1. / (m_collision_max_force + gravity_at_diameter);
+	const double q = 1. / ((m_collision_max_force + gravity_at_diameter) * m_squared);
 	return 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + gravity_at_diameter;
 }
 
-inline double simulation::gravitational_force(const double distance_squared) const
+inline double simulation::gravitational_force(const double &m1, const double &m2, const double &distance_squared) const
 {
-	return m_g_const / distance_squared;
+	return m_g_const * m1 * m2 / distance_squared;
 }
 
 void simulation::cell_pair_interaction(cell &a, const cell &b)
@@ -500,7 +503,7 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	const double distance = sqrt(distance_squared);
 	const vec2 unit_vec = ab / distance;
 
-	const double f = gravitational_force(distance_squared);
+	const double f = gravitational_force(a.m_total_mass, b.m_total_mass, distance_squared);
 
-	a.m_a = a.m_a + unit_vec * f * b.m_num_particles;
+	a.m_a = a.m_a + unit_vec * (f / a.m_total_mass);
 }

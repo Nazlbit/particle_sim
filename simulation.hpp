@@ -16,6 +16,8 @@ struct particle
     vec2 pos;
     vec2 v;
     vec2 a;
+	double size;
+	double m;
 };
 
 class simulation
@@ -33,6 +35,7 @@ private:
         vec2 m_center_of_mass = {};
         vec2 m_a = {};
         std::vector<const cell *> m_surrounding_cells;
+		double m_total_mass = 0;
 
 		cell(cell *const parent, const rect r, const size_t particles_limit);
 
@@ -93,9 +96,9 @@ private:
 
 	void calculate_physics();
 
-	double collision_force(const double distance_squared) const;
+	double collision_force(const double &collision_distance, const double &distance_squared, const double &m1, const double &m2) const;
 
-	double gravitational_force(const double distance_squared) const;
+	double gravitational_force(const double &m1, const double &m2, const double &distance_squared) const;
 
 public:
 	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
