@@ -68,7 +68,7 @@ void application::run()
 									   "out vec4 FragColor;\n"
 									   "void main()\n"
 									   "{\n"
-									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.1f);\n"
+									   "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.01f);\n"
 									   "}\n\0";
 
 	unsigned int vertexShader = gl.CreateShader(GL_VERTEX_SHADER);
@@ -122,7 +122,7 @@ void application::run()
 	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
 	gl.EnableVertexAttribArray(0);
 
-	gl.PointSize(3);
+	gl.PointSize(particle_size / sim_size * 1600);
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
