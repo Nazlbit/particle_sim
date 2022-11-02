@@ -39,8 +39,6 @@ void application::generate_particles()
 
 		p.v = vec2{p.pos.y, -p.pos.x} * initial_velocity_factor;
 
-		p.m = 1;
-		p.size = particle_size;
 		m_simulation->add(p);
 	}
 }
