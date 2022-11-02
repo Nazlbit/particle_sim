@@ -214,7 +214,7 @@ void simulation::cell::calculate_center_of_mass()
 	m_center_of_mass = m_center_of_mass / m_total_mass;
 }
 
-simulation::simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
+simulation::simulation(const rect r, const size_t num_threads, const double dt,
                        const double g_const, const double wall_collision_cor, const double collision_max_force,
 					   const double drag_factor, const size_t cell_particles_limit, const double cell_proximity_factor) :
 	m_root(nullptr, r, cell_particles_limit),
@@ -227,7 +227,6 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 		stop_workers();
 	}),
 	m_dt(dt),
-	m_particle_size(particle_size),
 	m_g_const(g_const),
 	m_wall_collision_cor(wall_collision_cor),
 	m_collision_max_force(collision_max_force),
