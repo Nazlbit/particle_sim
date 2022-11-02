@@ -92,14 +92,13 @@ void simulation::cell::add(const particle &p)
 	}
 }
 
-void simulation::cell::propagate_particles_up()
+void simulation::cell::propagate_particles_up(std::vector<particle> &temp_particles)
 {
-	static std::vector<particle> temp_particles;
 	if (!m_children.empty())
 	{
 		for (cell &child : m_children)
 		{
-			child.propagate_particles_up();
+			child.propagate_particles_up(temp_particles);
 		}
 	}
 
@@ -289,7 +288,7 @@ void simulation::progress()
 
 	// const auto t3 = std::chrono::steady_clock::now();
 
-	m_root.propagate_particles_up();
+	m_root.propagate_particles_up(m_temp_particles);
 	m_root.propagate_particles_down();
 
 	// const auto t4 = std::chrono::steady_clock::now();

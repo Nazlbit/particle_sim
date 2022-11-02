@@ -44,7 +44,7 @@ private:
 
 		void add(const particle &p);
 
-		void propagate_particles_up();
+		void propagate_particles_up(std::vector<particle> &temp_particles);
 
 		void propagate_particles_down();
 
@@ -77,6 +77,7 @@ private:
 	double m_collision_max_force;
 	double m_drag_factor;
 	double m_cell_proximity_factor;
+	std::vector<particle> m_temp_particles;
 
 	void reset_leafs_iterator();
 
