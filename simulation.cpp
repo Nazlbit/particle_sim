@@ -6,7 +6,6 @@
 simulation::cell::cell(cell *const parent, const rect r, const size_t particles_limit) : m_parent(parent), m_rect(r), m_particles_limit(particles_limit)
 {
 	m_particles.reserve(m_particles_limit + 1);
-	m_children.reserve(m_num_children);
 }
 
 void simulation::cell::subdivide()
