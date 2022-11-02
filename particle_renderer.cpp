@@ -62,7 +62,7 @@ particle_renderer::particle_renderer(const GladGLContext *gl, const simulation *
 										 "out vec4 FragColor;\n"
 										 "void main()\n"
 										 "{\n"
-										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.025f);\n"
+										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.1f);\n"
 										 "}\n\0";
 
 	const GLuint vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER);
@@ -116,7 +116,7 @@ void particle_renderer::configure_pipeline()
 {
 	m_gl->BindVertexArray(m_VAO);
 	m_gl->UseProgram(m_shader_program);
-	m_gl->PointSize(10);
+	m_gl->PointSize(2);
 	m_gl->Enable(GL_BLEND);
 	m_gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	m_gl->Enable(GL_MULTISAMPLE);

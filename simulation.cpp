@@ -473,12 +473,12 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 	return unit_vec * f;
 }
 
-inline double simulation::collision_force(const double &collision_distance, const double &distance_squared, const double &m1, const double &m2) const
+double simulation::collision_force(const double &collision_distance, const double &distance_squared, const double &m1, const double &m2) const
 {
 	const double m_squared = m1 * m2;
 	const double diameter_squared = collision_distance * collision_distance;
-	const double gravity_at_diameter = m_g_const / diameter_squared;
-	const double q = 1. / ((m_collision_max_force + gravity_at_diameter) * m_squared);
+	const double gravity_at_diameter = m_g_const * m_squared / diameter_squared;
+	const double q = 1. / (m_collision_max_force * m_squared + gravity_at_diameter);
 	return 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + gravity_at_diameter;
 }
 

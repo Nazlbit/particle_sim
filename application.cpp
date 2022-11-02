@@ -31,7 +31,7 @@ void application::init()
 
 void application::generate_particles()
 {
-	for (size_t i = 0; i < num_particles - 2; ++i)
+	for (size_t i = 0; i < num_particles; ++i)
 	{
 		particle p;
 		p.pos = {random_double(-0.5, 0.5) * m_sim_width, random_double(-0.5, 0.5) * m_sim_height};
@@ -41,19 +41,6 @@ void application::generate_particles()
 
 		p.m = 1;
 		p.size = particle_size;
-		m_simulation->add(p);
-	}
-
-	for (size_t i = 0; i < 2; ++i)
-	{
-		particle p;
-		p.pos = {random_double(-0.5, 0.5) * m_sim_width, random_double(-0.5, 0.5) * m_sim_height};
-		p.pos = p.pos * generation_scale;
-
-		p.v = vec2{p.pos.y, -p.pos.x} * initial_velocity_factor;
-
-		p.m = 10000;
-		p.size = particle_size * 10;
 		m_simulation->add(p);
 	}
 }
