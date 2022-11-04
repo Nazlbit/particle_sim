@@ -23,7 +23,9 @@ add_executable(particles ${SRC_FILES} ${HEADER_FILES})
 
 set_target_properties(particles PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
-target_link_libraries(particles pthread)
+find_package(Threads REQUIRED)
+
+target_link_libraries(particles Threads::Threads)
 
 add_subdirectory(dependencies/glad)
 
