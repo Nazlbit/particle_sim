@@ -190,11 +190,12 @@ void simulation::cell::get_particles_positions(std::vector<vec2> &particles) con
 	}
 	else
 	{
-		auto it = particles.end();
+		size_t it = particles.size();
 		particles.resize(particles.size() + m_particles.size());
 		for (const particle &p : m_particles)
 		{
-			*(it++) = p.pos;
+			particles[it] = p.pos;
+			++it;
 		}
 	}
 }
