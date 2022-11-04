@@ -8,8 +8,11 @@ void application::init()
 {
 	m_wnd = window("particle_sim", 0, 0, true);
 
-	m_wnd.set_key_callback([this](int key, int scancode, int action, int mods)
+	m_wnd.set_key_callback([this](const int &key, const int &scancode, const int &action, const int &mods)
 						   { window_key_callback(key, scancode, action, mods); });
+
+	m_wnd.set_cursor_pos_callback([this](const double &x, const double &y)
+								  { window_cursor_pos_callback(x, y); });
 
 	const window::dimensions wnd_size = m_wnd.get_size();
 	const double ratio = (double)wnd_size.width / wnd_size.height;
@@ -87,10 +90,19 @@ application::~application()
 	m_worker.join();
 }
 
-void application::window_key_callback(int key, int scancode, int action, int mods)
+void application::window_key_callback(const int &key, const int &scancode, const int &action, const int &mods)
 {
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 	{
 		m_wnd.close();
 	}
+}
+
+void application::window_cursor_pos_callback(const double &x, const double &y)
+{
+	const auto wnd_size = m_wnd.get_size();
+	const double x_norm = std::clamp(x / wnd_size.width, 0.0, 1.0) - 0.5;
+	const double y_norm = 0.5 - std::clamp(y / wnd_size.height, 0.0, 1.0);
+
+	printf("Cursor pos normalized: %f:%f\n", x_norm, y_norm);
 }

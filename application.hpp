@@ -33,7 +33,8 @@ private:
 	void init();
 	void generate_particles();
 	void work();
-	void window_key_callback(int key, int scancode, int action, int mods);
+	void window_key_callback(const int &key, const int &scancode, const int &action, const int &mods);
+	void window_cursor_pos_callback(const double &x, const double &y);
 
 public:
 	application();

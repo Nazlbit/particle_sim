@@ -39,6 +39,7 @@ window::window(const char *title, const int width, const int height, const bool 
 
 	glfwSetWindowUserPointer(m_wnd, this);
 	glfwSetKeyCallback(m_wnd, &window::key_callback_static);
+	glfwSetCursorPosCallback(m_wnd, &window::cursor_pos_callback_static);
 }
 
 window::~window()
@@ -46,25 +47,26 @@ window::~window()
 	glfwDestroyWindow(m_wnd);
 }
 
-window::window(window &&wnd)
+void window::move(window &&other)
 {
-	m_gl = wnd.m_gl;
-	m_wnd = wnd.m_wnd;
-	m_size = wnd.m_size;
-	wnd.m_wnd = nullptr;
-	m_key_callback = std::move(wnd.m_key_callback);
+	m_gl = other.m_gl;
+	m_wnd = other.m_wnd;
+	m_size = other.m_size;
+	other.m_wnd = nullptr;
+	m_key_callback = std::move(other.m_key_callback);
+	m_cursor_pos_callback = std::move(other.m_cursor_pos_callback);
 	glfwSetWindowUserPointer(m_wnd, this);
 }
 
-window &window::operator=(window &&wnd)
+window::window(window &&other)
+{
+	move(std::move(other));
+}
+
+window &window::operator=(window &&other)
 {
 	glfwDestroyWindow(m_wnd);
-	m_gl = wnd.m_gl;
-	m_wnd = wnd.m_wnd;
-	m_size = wnd.m_size;
-	wnd.m_wnd = nullptr;
-	m_key_callback = std::move(wnd.m_key_callback);
-	glfwSetWindowUserPointer(m_wnd, this);
+	move(std::move(other));
 	return *this;
 }
 
@@ -74,5 +76,14 @@ void window::key_callback_static(GLFWwindow *wnd, int key, int scancode, int act
 	if(instance->m_key_callback)
 	{
 		instance->m_key_callback(key, scancode, action, mods);
+	}
+}
+
+void window::cursor_pos_callback_static(GLFWwindow *wnd, double x, double y)
+{
+	window *const instance = static_cast<window *>(glfwGetWindowUserPointer(wnd));
+	if (instance->m_cursor_pos_callback)
+	{
+		instance->m_cursor_pos_callback(x, y);
 	}
 }
