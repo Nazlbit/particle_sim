@@ -8,6 +8,9 @@ void application::init()
 {
 	m_wnd = window("particle_sim", 0, 0, true);
 
+	m_wnd.set_key_callback([this](int key, int scancode, int action, int mods)
+						   { window_key_callback(key, scancode, action, mods); });
+
 	const window::dimensions wnd_size = m_wnd.get_size();
 	const double ratio = (double)wnd_size.width / wnd_size.height;
 	m_sim_width = sim_size * ratio;
@@ -82,4 +85,12 @@ application::~application()
 {
 	m_worker_active = false;
 	m_worker.join();
+}
+
+void application::window_key_callback(int key, int scancode, int action, int mods)
+{
+	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+	{
+		m_wnd.close();
+	}
 }

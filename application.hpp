@@ -33,6 +33,7 @@ private:
 	void init();
 	void generate_particles();
 	void work();
+	void window_key_callback(int key, int scancode, int action, int mods);
 
 public:
 	application();

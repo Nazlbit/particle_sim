@@ -36,6 +36,9 @@ window::window(const char *title, const int width, const int height, const bool 
 	glfwMakeContextCurrent(m_wnd);
 
 	ASSERT_EX_M(gladLoadGLContext(&m_gl, glfwGetProcAddress), "Failed to initialize OpenGL context");
+
+	glfwSetWindowUserPointer(m_wnd, this);
+	glfwSetKeyCallback(m_wnd, &window::key_callback_static);
 }
 
 window::~window()
@@ -49,6 +52,8 @@ window::window(window &&wnd)
 	m_wnd = wnd.m_wnd;
 	m_size = wnd.m_size;
 	wnd.m_wnd = nullptr;
+	m_key_callback = std::move(wnd.m_key_callback);
+	glfwSetWindowUserPointer(m_wnd, this);
 }
 
 window &window::operator=(window &&wnd)
@@ -58,5 +63,16 @@ window &window::operator=(window &&wnd)
 	m_wnd = wnd.m_wnd;
 	m_size = wnd.m_size;
 	wnd.m_wnd = nullptr;
+	m_key_callback = std::move(wnd.m_key_callback);
+	glfwSetWindowUserPointer(m_wnd, this);
 	return *this;
+}
+
+void window::key_callback_static(GLFWwindow *wnd, int key, int scancode, int action, int mods)
+{
+	window *const instance = static_cast<window*>(glfwGetWindowUserPointer(wnd));
+	if(instance->m_key_callback)
+	{
+		instance->m_key_callback(key, scancode, action, mods);
+	}
 }

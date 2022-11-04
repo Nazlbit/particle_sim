@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+
 #include "glfw_singleton.hpp"
 
 class window
@@ -13,6 +15,9 @@ private:
 	GLFWwindow *m_wnd = nullptr;
 	GladGLContext m_gl{};
 	dimensions m_size;
+	std::function<void(int, int, int, int)> m_key_callback;
+
+	static void key_callback_static(GLFWwindow *wnd, int key, int scancode, int action, int mods);
 
 public:
 	window() = default;
@@ -53,5 +58,16 @@ public:
 	dimensions get_size() const
 	{
 		return m_size;
+	}
+
+	/* Key callback function prototype must be void(int key, int scancode, int action, int mods) */
+	void set_key_callback(std::function<void(int, int, int, int)> key_callback)
+	{
+		m_key_callback = std::move(key_callback);
+	}
+
+	void close()
+	{
+		glfwSetWindowShouldClose(m_wnd, GLFW_TRUE);
 	}
 };
