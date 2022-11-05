@@ -16,10 +16,12 @@ private:
 	GladGLContext m_gl{};
 	dimensions m_size;
 	std::function<void(const int&, const int&, const int&, const int&)> m_key_callback;
-	std::function<void(const double&, const double&)> m_cursor_pos_callback;
+	std::function<void(const double &, const double &)> m_cursor_pos_callback;
+	std::function<void(const int &, const int &, const int &)> m_mouse_button_callback;
 
 	static void key_callback_static(GLFWwindow *wnd, int key, int scancode, int action, int mods);
 	static void cursor_pos_callback_static(GLFWwindow *wnd, double x, double y);
+	static void mouse_button_callback_static(GLFWwindow *wnd, int button, int action, int mods);
 
 	void move(window &&other);
 
@@ -74,6 +76,12 @@ public:
 	void set_cursor_pos_callback(std::function<void(const double&, const double&)> cursor_pos_callback)
 	{
 		m_cursor_pos_callback = std::move(cursor_pos_callback);
+	}
+
+	/* Key callback function prototype must be void(const int &, const int &, const int &) */
+	void set_mouse_button_callback(std::function<void(const int &, const int &, const int &)> mouse_button_callback)
+	{
+		m_mouse_button_callback = std::move(mouse_button_callback);
 	}
 
 	void close()

@@ -1,4 +1,5 @@
 #include <thread>
+#include <algorithm>
 
 #include "application.hpp"
 
@@ -13,6 +14,9 @@ void application::init()
 
 	m_wnd.set_cursor_pos_callback([this](const double &x, const double &y)
 								  { window_cursor_pos_callback(x, y); });
+
+	m_wnd.set_mouse_button_callback([this](const int &button, const int &action, const int &mods)
+									{ window_mouse_button_callback(button, action, mods); });
 
 	const window::dimensions wnd_size = m_wnd.get_size();
 	const double ratio = (double)wnd_size.width / wnd_size.height;
@@ -105,4 +109,19 @@ void application::window_cursor_pos_callback(const double &x, const double &y)
 	const double y_norm = 0.5 - std::clamp(y / wnd_size.height, 0.0, 1.0);
 
 	printf("Cursor pos normalized: %f:%f\n", x_norm, y_norm);
+}
+
+void application::window_mouse_button_callback(const int &button, const int &action, const int &mods)
+{
+	if(button == GLFW_MOUSE_BUTTON_LEFT)
+	{
+		if (action == GLFW_PRESS)
+		{
+			printf("Left mouse button press\n");
+		}
+		else
+		{
+			printf("Left mouse button release\n");
+		}
+	}
 }

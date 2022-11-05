@@ -40,6 +40,7 @@ window::window(const char *title, const int width, const int height, const bool 
 	glfwSetWindowUserPointer(m_wnd, this);
 	glfwSetKeyCallback(m_wnd, &window::key_callback_static);
 	glfwSetCursorPosCallback(m_wnd, &window::cursor_pos_callback_static);
+	glfwSetMouseButtonCallback(m_wnd, &window::mouse_button_callback_static);
 }
 
 window::~window()
@@ -55,6 +56,7 @@ void window::move(window &&other)
 	other.m_wnd = nullptr;
 	m_key_callback = std::move(other.m_key_callback);
 	m_cursor_pos_callback = std::move(other.m_cursor_pos_callback);
+	m_mouse_button_callback = std::move(other.m_mouse_button_callback);
 	glfwSetWindowUserPointer(m_wnd, this);
 }
 
@@ -85,5 +87,14 @@ void window::cursor_pos_callback_static(GLFWwindow *wnd, double x, double y)
 	if (instance->m_cursor_pos_callback)
 	{
 		instance->m_cursor_pos_callback(x, y);
+	}
+}
+
+void window::mouse_button_callback_static(GLFWwindow *wnd, int button, int action, int mods)
+{
+	window *const instance = static_cast<window *>(glfwGetWindowUserPointer(wnd));
+	if (instance->m_mouse_button_callback)
+	{
+		instance->m_mouse_button_callback(button, action, mods);
 	}
 }
