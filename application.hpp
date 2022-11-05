@@ -15,7 +15,7 @@ private:
 	static constexpr double drag_factor = 0.025;
 	static constexpr double collision_max_force = 1;
 	static constexpr double initial_velocity_factor = 0.2;
-	static constexpr size_t num_particles = 32000;
+	static constexpr size_t num_particles = 8000;
 	static constexpr size_t cell_particles_limit = 32;
 	static constexpr double wall_collision_cor = 0.;
 	static constexpr double generation_scale = 0.4;

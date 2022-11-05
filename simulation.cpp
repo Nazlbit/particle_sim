@@ -384,6 +384,11 @@ void simulation::calculate_physics()
 				}
 
 				p1.a = p1.a + c1.m_a;
+
+				if(m_user_pointer.active)
+				{
+					user_pointer_force(p1);
+				}
 			}
 			c1.m_surrounding_cells.clear();
 			c1.m_a = {};
@@ -473,7 +478,7 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 	return unit_vec * f;
 }
 
-inline double simulation::collision_force(const double distance_squared) const
+inline double simulation::collision_force(const double &distance_squared) const
 {
 	const double diameter_squared = m_particle_size * m_particle_size;
 	const double gravity_at_diameter = m_g_const / diameter_squared;
@@ -481,7 +486,7 @@ inline double simulation::collision_force(const double distance_squared) const
 	return 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + gravity_at_diameter;
 }
 
-inline double simulation::gravitational_force(const double distance_squared) const
+inline double simulation::gravitational_force(const double &distance_squared) const
 {
 	return m_g_const / distance_squared;
 }
@@ -511,4 +516,37 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	const double f = gravitational_force(distance_squared);
 
 	a.m_a = a.m_a + unit_vec * f * b.m_num_particles;
+}
+
+void simulation::user_pointer_force(particle &p)
+{
+	const vec2 ab = m_user_pointer.pos - p.pos;
+	const double distance_squared = ab * ab;
+	if (!std::isnormal(distance_squared)) [[unlikely]]
+	{
+		return;
+	}
+
+	const double distance = sqrt(distance_squared);
+	const vec2 unit_vec = ab / distance;
+
+	const double radius_sum = (m_particle_size + m_user_pointer.size) * 0.5;
+	if (distance < radius_sum)
+	{
+		/* Collision */
+		const double radius_sum_squared = radius_sum * radius_sum;
+		const double gravity_at_collision_point = gravitational_force(radius_sum_squared) * m_user_pointer.mass;
+		constexpr double mass_force_ratio = 10;
+		const double q = 1. / (m_user_pointer.mass * mass_force_ratio + gravity_at_collision_point);
+		const double collision_f = 1 - radius_sum_squared * (1 + q) / (distance_squared + radius_sum_squared * q) + gravity_at_collision_point;
+
+		const vec2 drag = -p.v * m_user_pointer.drag_factor;
+
+		p.a = p.a + unit_vec * collision_f + drag;
+	}
+	else
+	{
+		/* Gravity */
+		p.a = p.a + unit_vec * (gravitational_force(distance_squared) * m_user_pointer.mass);
+	}
 }

@@ -77,6 +77,13 @@ private:
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
 	std::atomic_bool alive = true;
+	struct{
+		vec2 pos;
+		double size = 10.0;
+		double mass = 10000.0;
+		bool active = false;
+		double drag_factor = 0.5;
+	} m_user_pointer;
 
 	void reset_leafs_iterator();
 
@@ -94,9 +101,11 @@ private:
 
 	void calculate_physics();
 
-	double collision_force(const double distance_squared) const;
+	double collision_force(const double &distance_squared) const;
 
-	double gravitational_force(const double distance_squared) const;
+	double gravitational_force(const double &distance_squared) const;
+
+	void user_pointer_force(particle &p);
 
 public:
 	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
@@ -119,5 +128,35 @@ public:
 	size_t get_num_particles() const
 	{
 		return m_root.m_num_particles;
+	}
+
+	void set_pointer_pos(const vec2 &pos)
+	{
+		m_user_pointer.pos = pos;
+	}
+
+	void activate_pointer()
+	{
+		m_user_pointer.active = true;
+	}
+
+	void deactivate_pointer()
+	{
+		m_user_pointer.active = false;
+	}
+
+	void set_pointer_mass(const double &mass)
+	{
+		m_user_pointer.mass = mass;
+	}
+
+	void set_pointer_size(const double &size)
+	{
+		m_user_pointer.size = size;
+	}
+
+	void set_pointer_drag_factor(const double &drag_factor)
+	{
+		m_user_pointer.drag_factor = drag_factor;
 	}
 };

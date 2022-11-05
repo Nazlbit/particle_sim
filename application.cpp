@@ -108,7 +108,8 @@ void application::window_cursor_pos_callback(const double &x, const double &y)
 	const double x_norm = std::clamp(x / wnd_size.width, 0.0, 1.0) - 0.5;
 	const double y_norm = 0.5 - std::clamp(y / wnd_size.height, 0.0, 1.0);
 
-	printf("Cursor pos normalized: %f:%f\n", x_norm, y_norm);
+	const vec2 pointer_pos = vec2{x_norm * m_sim_width, y_norm * m_sim_height};
+	m_simulation->set_pointer_pos(pointer_pos);
 }
 
 void application::window_mouse_button_callback(const int &button, const int &action, const int &mods)
@@ -117,11 +118,11 @@ void application::window_mouse_button_callback(const int &button, const int &act
 	{
 		if (action == GLFW_PRESS)
 		{
-			printf("Left mouse button press\n");
+			m_simulation->activate_pointer();
 		}
 		else
 		{
-			printf("Left mouse button release\n");
+			m_simulation->deactivate_pointer();
 		}
 	}
 }
