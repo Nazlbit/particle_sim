@@ -8,9 +8,12 @@ class glfw_singleton
 {
 	static glfw_singleton instance;
 
+	static void error_callback(int code, const char *str);
+
 	glfw_singleton()
 	{
 		CRITICAL_ASSERT_M(glfwInit(), "Failed to initialize GLFW");
+		glfwSetErrorCallback(&glfw_singleton::error_callback);
 	}
 
 	~glfw_singleton()
@@ -18,5 +21,3 @@ class glfw_singleton
 		glfwTerminate();
 	}
 };
-
-inline glfw_singleton glfw_singleton::instance;

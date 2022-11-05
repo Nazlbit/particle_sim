@@ -16,7 +16,7 @@ public:
 		return m_msg;
 	}
 
-	static constexpr uint16_t msg_size_limit = 128;
+	static constexpr uint16_t msg_size_limit = 512;
 
 private:
 	char m_msg[msg_size_limit];

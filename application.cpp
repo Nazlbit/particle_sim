@@ -1,6 +1,5 @@
 #include <thread>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#include <algorithm>
 
 #include "application.hpp"
 
@@ -8,53 +7,29 @@ using namespace std::chrono_literals;
 
 void application::init()
 {
-	struct winsize w;
-	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-	m_screen_width = w.ws_col;
-	m_screen_height = w.ws_row;
+	m_wnd = window("particle_sim", 0, 0, true);
 
-	// debug
-	if (m_screen_width == 0 || m_screen_height == 0)
-	{
-		m_screen_width = 100;
-		m_screen_height = 50;
-	}
+	m_wnd.set_key_callback([this](const int &key, const int &scancode, const int &action, const int &mods)
+						   { window_key_callback(key, scancode, action, mods); });
 
-	const double ratio = m_screen_width * char_ratio / m_screen_height;
+	m_wnd.set_cursor_pos_callback([this](const double &x, const double &y)
+								  { window_cursor_pos_callback(x, y); });
+
+	m_wnd.set_mouse_button_callback([this](const int &button, const int &action, const int &mods)
+									{ window_mouse_button_callback(button, action, mods); });
+
+	const window::dimensions wnd_size = m_wnd.get_size();
+	const double ratio = (double)wnd_size.width / wnd_size.height;
 	m_sim_width = sim_size * ratio;
 	m_sim_height = sim_size;
-	m_screen.reserve((m_screen_width + 1) * m_screen_height);
 
 	const vec2 half_sim_size = vec2{m_sim_width, m_sim_height} * 0.5;
-
 	m_simulation = std::make_unique<simulation>(rect{-half_sim_size, half_sim_size}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
-}
 
-void application::clear_screen()
-{
-	m_screen.assign((m_screen_width + 1) * m_screen_height, ' ');
-	for (uint32_t i = 0; i < m_screen_height; i++)
-	{
-		m_screen[(m_screen_width + 1) * i + m_screen_width] = '\n';
-	}
-	m_screen[(m_screen_width + 1) * m_screen_height - 1] = '\0';
-}
+	generate_particles();
 
-void application::draw_quad_tree()
-{
-	clear_screen();
-	for (const vec2 &p : m_simulation->get_particles_positions())
-	{
-		const int x = (p.x / m_sim_width + 0.5) * m_screen_width;
-		const int y = (p.y / m_sim_height + 0.5) * m_screen_height;
-		if (x >= 0 && x < m_screen_width && y >= 0 && y < m_screen_height)
-		{
-			m_screen[(m_screen_width + 1) * y + x] = '#';
-		}
-	}
-
-	system("clear");
-	printf("%s", m_screen.data());
+	m_renderer = particle_renderer(&m_wnd.gl(), m_simulation.get());
+	m_renderer.configure_pipeline();
 }
 
 void application::generate_particles()
@@ -71,33 +46,57 @@ void application::generate_particles()
 	}
 }
 
-void application::work()
+void application::run()
 {
-	while (true)
+	m_simulation->start();
+	while (!m_wnd.should_close())
 	{
-		m_simulation->progress();
+		window::poll_events();
+
+		m_renderer.render();
+
+		m_wnd.swap_buffers();
 	}
 }
 
-void application::run()
+application::application()
 {
 	init();
-	generate_particles();
+}
 
-	std::thread worker([this]
-						{ work(); });
-	while (true)
+application::~application()
+{
+}
+
+void application::window_key_callback(const int &key, const int &scancode, const int &action, const int &mods)
+{
+	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 	{
-		const auto t1 = std::chrono::steady_clock::now();
-
-		draw_quad_tree();
-
-		const auto draw_time = std::chrono::steady_clock::now() - t1;
-
-		const auto sleep_duration = 1000'000'000ns / fps - draw_time;
-
-		std::this_thread::sleep_for(sleep_duration);
+		m_wnd.close();
 	}
+}
 
-	worker.join();
+void application::window_cursor_pos_callback(const double &x, const double &y)
+{
+	const auto wnd_size = m_wnd.get_size();
+	const double x_norm = std::clamp(x / wnd_size.width, 0.0, 1.0) - 0.5;
+	const double y_norm = 0.5 - std::clamp(y / wnd_size.height, 0.0, 1.0);
+
+	const vec2 pointer_pos = vec2{x_norm * m_sim_width, y_norm * m_sim_height};
+	m_simulation->set_pointer_pos(pointer_pos);
+}
+
+void application::window_mouse_button_callback(const int &button, const int &action, const int &mods)
+{
+	if(button == GLFW_MOUSE_BUTTON_LEFT)
+	{
+		if (action == GLFW_PRESS)
+		{
+			m_simulation->activate_pointer();
+		}
+		else
+		{
+			m_simulation->deactivate_pointer();
+		}
+	}
 }

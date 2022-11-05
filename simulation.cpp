@@ -175,7 +175,10 @@ void simulation::cell::get_particles(std::vector<particle> &particles) const
 	}
 	else
 	{
-		particles.insert(particles.end(), m_particles.begin(), m_particles.end());
+		for(const particle &p : m_particles)
+		{
+			particles.push_back(p);
+		}
 	}
 }
 
@@ -230,19 +233,38 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_drag_factor(drag_factor),
 	m_cell_proximity_factor(cell_proximity_factor)
 {
-	for (auto &worker : m_workers)
-	{
-		worker = std::thread([this] {
-			calculate_physics();
-		});
-	}
 }
 
 simulation::~simulation()
 {
-	for (auto &worker : m_workers)
+	stop();
+}
+
+void simulation::spawn_worker_threads()
+{
+	if (!m_workers_alive)
 	{
-		worker.join();
+		m_workers_alive = true;
+
+		for (auto &worker : m_workers)
+		{
+			worker = std::thread([this]
+								 { calculate_physics(); });
+		}
+	}
+}
+
+void simulation::kill_worker_threads()
+{
+	if (m_workers_alive)
+	{
+		m_workers_alive = false;
+		m_head_workers_cv.notify_all();
+
+		for (auto &worker : m_workers)
+		{
+			worker.join();
+		}
 	}
 }
 
@@ -258,7 +280,7 @@ inline void simulation::stop_workers()
 
 const std::vector<vec2> &simulation::get_particles_positions() const
 {
-	std::lock_guard lock(m_particles_mutex);
+	std::lock_guard lock(m_user_access_mutex);
 	if(m_swap_buffers)
 	{
 		m_particles_positions[0].swap(m_particles_positions[1]);
@@ -270,46 +292,72 @@ const std::vector<vec2> &simulation::get_particles_positions() const
 void simulation::progress()
 {
 	std::unique_lock lock{m_head_workers_mutex};
-	// const auto t1 = std::chrono::steady_clock::now();
-
-	m_leafs.clear();
-	m_root.find_leafs(m_leafs);
-
-	// const auto t2 = std::chrono::steady_clock::now();
-
-	m_workers_awake = true;
-	lock.unlock();
-	m_head_workers_cv.notify_all();
-	m_barrier_start.wait();
-	lock.lock();
-
-	// const auto t3 = std::chrono::steady_clock::now();
-
-	m_root.propagate_particles_up(m_temp_particles);
-	m_root.propagate_particles_down();
-
-	// const auto t4 = std::chrono::steady_clock::now();
-
-	m_particles_positions[2].clear();
-	m_particles_positions[2].reserve(m_root.m_num_particles);
-	m_root.get_particles_positions(m_particles_positions[2]);
-
-	// const auto t5 = std::chrono::steady_clock::now();
-
-	// const auto dt1 = (t2 - t1).count();
-	// const auto dt2 = (t3 - t2).count();
-	// const auto dt3 = (t4 - t3).count();
-	// const auto dt4 = (t5 - t4).count();
-
-	// printf("dt1: %lluns\n", dt1);
-	// printf("dt2: %lluns\n", dt2);
-	// printf("dt3: %lluns\n", dt3);
-	// printf("dt4: %lluns\n", dt4);
-
+	double dt = 0;
+	size_t num = 0;
+	while (m_head_alive)
 	{
-		std::lock_guard lock(m_particles_mutex);
-		m_particles_positions[2].swap(m_particles_positions[1]);
-		m_swap_buffers = true;
+		const auto t1 = std::chrono::steady_clock::now();
+
+		m_leafs.clear();
+		m_root.find_leafs(m_leafs);
+
+		m_workers_awake = true;
+		lock.unlock();
+		m_head_workers_cv.notify_all();
+		m_barrier_start.wait();
+		lock.lock();
+
+		m_root.propagate_particles_up(m_temp_particles);
+		m_root.propagate_particles_down();
+
+		m_particles_positions[2].clear();
+		m_particles_positions[2].reserve(m_root.m_num_particles);
+		m_root.get_particles_positions(m_particles_positions[2]);
+
+		{
+			std::lock_guard lock(m_user_access_mutex);
+
+			m_particles_positions[2].swap(m_particles_positions[1]);
+			m_swap_buffers = true;
+
+			m_user_pointer = m_user_pointer_tmp;
+		}
+
+		const auto t2 = std::chrono::steady_clock::now();
+		dt += std::chrono::duration<double>(t2-t1).count();
+		++num;
+
+		if(dt > 1)
+		{
+			printf("FPS: %f\n", num / dt);
+			num = 0;
+			dt = 0;
+		}
+	}
+}
+
+void simulation::start()
+{
+	if(!m_head_alive)
+	{
+		spawn_worker_threads();
+
+		m_head_alive = true;
+
+		m_head = std::thread([this]
+							 { progress(); });
+	}
+}
+
+void simulation::stop()
+{
+	if (m_head_alive)
+	{
+		m_head_alive = false;
+
+		m_head.join();
+
+		kill_worker_threads();
 	}
 }
 
@@ -326,7 +374,11 @@ void simulation::calculate_physics()
 	while (true)
 	{
 		m_head_workers_cv.wait(lock, [this]
-							   { return m_workers_awake; });
+							   { return m_workers_awake | !m_workers_alive; });
+		if(!m_workers_alive)
+		{
+			return;
+		}
 
 		m_barrier_start.wait();
 
@@ -374,6 +426,11 @@ void simulation::calculate_physics()
 				}
 
 				p1.a = p1.a + c1.m_a;
+
+				if(m_user_pointer.active)
+				{
+					user_pointer_force(p1);
+				}
 			}
 			c1.m_surrounding_cells.clear();
 			c1.m_a = {};
@@ -407,7 +464,7 @@ void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
 	const double r = m_particle_size * 0.5;
 	if (distance < r) [[unlikely]]
 	{
-		p.pos = p.pos + wall_normal * (r - distance) * 1.001;
+		p.pos = p.pos + wall_normal * (m_particle_size - distance) * 1.001;
 
 		const double projected_v = p.v * wall_normal;
 		if (projected_v < 0)
@@ -463,7 +520,7 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 	return unit_vec * f;
 }
 
-inline double simulation::collision_force(const double distance_squared) const
+inline double simulation::collision_force(const double &distance_squared) const
 {
 	const double diameter_squared = m_particle_size * m_particle_size;
 	const double gravity_at_diameter = m_g_const / diameter_squared;
@@ -471,7 +528,7 @@ inline double simulation::collision_force(const double distance_squared) const
 	return 1 - diameter_squared * (1 + q) / (distance_squared + diameter_squared * q) + gravity_at_diameter;
 }
 
-inline double simulation::gravitational_force(const double distance_squared) const
+inline double simulation::gravitational_force(const double &distance_squared) const
 {
 	return m_g_const / distance_squared;
 }
@@ -498,7 +555,40 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	const double distance = sqrt(distance_squared);
 	const vec2 unit_vec = ab / distance;
 
-	double f = gravitational_force(distance_squared);
+	const double f = gravitational_force(distance_squared);
 
 	a.m_a = a.m_a + unit_vec * f * b.m_num_particles;
+}
+
+void simulation::user_pointer_force(particle &p)
+{
+	const vec2 ab = m_user_pointer.pos - p.pos;
+	const double distance_squared = ab * ab;
+	if (!std::isnormal(distance_squared)) [[unlikely]]
+	{
+		return;
+	}
+
+	const double distance = sqrt(distance_squared);
+	const vec2 unit_vec = ab / distance;
+
+	const double radius_sum = (m_particle_size + m_user_pointer.size) * 0.5;
+	if (distance < radius_sum)
+	{
+		/* Collision */
+		const double radius_sum_squared = radius_sum * radius_sum;
+		const double gravity_at_collision_point = gravitational_force(radius_sum_squared) * m_user_pointer.mass;
+		constexpr double mass_force_ratio = 10;
+		const double q = 1. / (m_user_pointer.mass * mass_force_ratio + gravity_at_collision_point);
+		const double collision_f = 1 - radius_sum_squared * (1 + q) / (distance_squared + radius_sum_squared * q) + gravity_at_collision_point;
+
+		const vec2 drag = -p.v * m_user_pointer.drag_factor;
+
+		p.a = p.a + unit_vec * collision_f + drag;
+	}
+	else
+	{
+		/* Gravity */
+		p.a = p.a + unit_vec * (gravitational_force(distance_squared) * m_user_pointer.mass);
+	}
 }

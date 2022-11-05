@@ -36,6 +36,20 @@ struct vec2
 	}
 };
 
+struct vec2_f
+{
+	float x = 0, y = 0;
+	vec2_f() = default;
+	vec2_f(const vec2 &v) : x(v.x), y(v.y){}
+
+	vec2_f &operator=(const vec2 &v)
+	{
+		x = v.x;
+		y = v.y;
+		return *this;
+	}
+};
+
 struct rect
 {
     vec2 bottom_left;

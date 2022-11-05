@@ -56,14 +56,17 @@ private:
 	};
 
 	cell m_root;
-    mutable std::mutex m_particles_mutex;
+    mutable std::mutex m_user_access_mutex;
 	static constexpr uint8_t m_particles_buffer_num = 3;
 	mutable std::array<std::vector<vec2>, m_particles_buffer_num> m_particles_positions;
 	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
-    std::vector<std::thread> m_workers;
-    std::atomic_size_t m_leafs_iterator = 0;
-    std::shared_mutex m_head_workers_mutex;
+	std::thread m_head;
+	std::vector<std::thread> m_workers;
+	std::atomic_bool m_head_alive = false;
+	std::atomic_bool m_workers_alive = false;
+	std::atomic_size_t m_leafs_iterator = 0;
+	std::shared_mutex m_head_workers_mutex;
     std::condition_variable_any m_head_workers_cv;
     bool m_workers_awake = false;
 	barrier m_barrier;
@@ -76,6 +79,17 @@ private:
 	double m_drag_factor;
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
+	struct user_pointer{
+		bool active = false;
+		vec2 pos;
+		double size = 20.0;
+		double mass = 10000.0;
+		double drag_factor = 0.5;
+	} m_user_pointer, m_user_pointer_tmp;
+
+	void spawn_worker_threads();
+
+	void kill_worker_threads();
 
 	void reset_leafs_iterator();
 
@@ -93,9 +107,13 @@ private:
 
 	void calculate_physics();
 
-	double collision_force(const double distance_squared) const;
+	double collision_force(const double &distance_squared) const;
 
-	double gravitational_force(const double distance_squared) const;
+	double gravitational_force(const double &distance_squared) const;
+
+	void user_pointer_force(particle &p);
+
+	void progress();
 
 public:
 	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
@@ -106,7 +124,55 @@ public:
 
 	const std::vector<vec2> &get_particles_positions() const;
 
-	void progress();
+	void start();
+
+	void stop();
 
 	void add(const particle &p);
+
+	rect get_sim_rect() const
+	{
+		return m_root.m_rect;
+	}
+
+	size_t get_num_particles() const
+	{
+		return m_root.m_num_particles;
+	}
+
+	void set_pointer_pos(const vec2 &pos)
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.pos = pos;
+	}
+
+	void activate_pointer()
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.active = true;
+	}
+
+	void deactivate_pointer()
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.active = false;
+	}
+
+	void set_pointer_mass(const double &mass)
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.mass = mass;
+	}
+
+	void set_pointer_size(const double &size)
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.size = size;
+	}
+
+	void set_pointer_drag_factor(const double &drag_factor)
+	{
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.drag_factor = drag_factor;
+	}
 };
