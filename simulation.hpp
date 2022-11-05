@@ -76,7 +76,7 @@ private:
 	double m_drag_factor;
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
-	std::atomic_bool alive = true;
+	std::atomic_bool m_workers_alive = false;
 	struct user_pointer{
 		bool active = false;
 		vec2 pos;
@@ -84,6 +84,10 @@ private:
 		double mass = 10000.0;
 		double drag_factor = 0.5;
 	} m_user_pointer, m_user_pointer_tmp;
+
+	void spawn_worker_threads();
+
+	void kill_worker_threads();
 
 	void reset_leafs_iterator();
 

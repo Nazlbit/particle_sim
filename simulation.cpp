@@ -233,22 +233,39 @@ simulation::simulation(const rect r, const size_t num_threads, const double dt, 
 	m_drag_factor(drag_factor),
 	m_cell_proximity_factor(cell_proximity_factor)
 {
-	for (auto &worker : m_workers)
-	{
-		worker = std::thread([this] {
-			calculate_physics();
-		});
-	}
+	spawn_worker_threads();
 }
 
 simulation::~simulation()
 {
-	alive = false;
-	m_head_workers_cv.notify_all();
+	kill_worker_threads();
+}
 
-	for (auto &worker : m_workers)
+void simulation::spawn_worker_threads()
+{
+	if (!m_workers_alive)
 	{
-		worker.join();
+		m_workers_alive = true;
+
+		for (auto &worker : m_workers)
+		{
+			worker = std::thread([this]
+								 { calculate_physics(); });
+		}
+	}
+}
+
+void simulation::kill_worker_threads()
+{
+	if (m_workers_alive)
+	{
+		m_workers_alive = false;
+		m_head_workers_cv.notify_all();
+
+		for (auto &worker : m_workers)
+		{
+			worker.join();
+		}
 	}
 }
 
@@ -335,8 +352,8 @@ void simulation::calculate_physics()
 	while (true)
 	{
 		m_head_workers_cv.wait(lock, [this]
-							   { return m_workers_awake | !alive; });
-		if(!alive)
+							   { return m_workers_awake | !m_workers_alive; });
+		if(!m_workers_alive)
 		{
 			return;
 		}
