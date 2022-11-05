@@ -7,7 +7,7 @@ using namespace std::chrono_literals;
 
 void application::init()
 {
-	m_wnd = window("particle_sim", 0, 0, true);
+	m_wnd = window("particle_sim", 1000, 1000, true);
 
 	m_wnd.set_key_callback([this](const int &key, const int &scancode, const int &action, const int &mods)
 						   { window_key_callback(key, scancode, action, mods); });
@@ -28,6 +28,7 @@ void application::init()
 
 	generate_particles();
 
+	m_wnd.make_context_current();
 	m_renderer = particle_renderer(&m_wnd.gl(), m_simulation.get());
 	m_renderer.configure_pipeline();
 }
