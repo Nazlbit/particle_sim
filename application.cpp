@@ -32,9 +32,6 @@ void application::init()
 	m_renderer = particle_renderer(&m_wnd.gl(), m_simulation.get());
 
 	m_renderer.configure_pipeline();
-
-	m_worker = std::thread([this]
-						   { work(); });
 }
 
 void application::generate_particles()
@@ -51,28 +48,9 @@ void application::generate_particles()
 	}
 }
 
-void application::work()
-{
-	double dt = 0;
-	int n = 0;
-	while (m_worker_active)
-	{
-		const auto t1 = std::chrono::steady_clock::now();
-		m_simulation->progress();
-		const auto t2 = std::chrono::steady_clock::now();
-		dt += std::chrono::duration<double>(t2-t1).count();
-		++n;
-		if(dt >= 1)
-		{
-			printf("FPS: %f\n", n/dt);
-			dt = 0;
-			n = 0;
-		}
-	}
-}
-
 void application::run()
 {
+	m_simulation->start();
 	while (!m_wnd.should_close())
 	{
 		window::poll_events();
@@ -90,8 +68,6 @@ application::application()
 
 application::~application()
 {
-	m_worker_active = false;
-	m_worker.join();
 }
 
 void application::window_key_callback(const int &key, const int &scancode, const int &action, const int &mods)

@@ -26,13 +26,10 @@ private:
 	std::unique_ptr<simulation> m_simulation;
 	double m_sim_width, m_sim_height;
 	window m_wnd;
-	std::atomic_bool m_worker_active = true;
 	particle_renderer m_renderer;
-	std::thread m_worker;
 
 	void init();
 	void generate_particles();
-	void work();
 	void window_key_callback(const int &key, const int &scancode, const int &action, const int &mods);
 	void window_cursor_pos_callback(const double &x, const double &y);
 	void window_mouse_button_callback(const int &button, const int &action, const int &mods);

@@ -61,9 +61,12 @@ private:
 	mutable std::array<std::vector<vec2>, m_particles_buffer_num> m_particles_positions;
 	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
-    std::vector<std::thread> m_workers;
-    std::atomic_size_t m_leafs_iterator = 0;
-    std::shared_mutex m_head_workers_mutex;
+	std::thread m_head;
+	std::vector<std::thread> m_workers;
+	std::atomic_bool m_head_alive = false;
+	std::atomic_bool m_workers_alive = false;
+	std::atomic_size_t m_leafs_iterator = 0;
+	std::shared_mutex m_head_workers_mutex;
     std::condition_variable_any m_head_workers_cv;
     bool m_workers_awake = false;
 	barrier m_barrier;
@@ -76,7 +79,6 @@ private:
 	double m_drag_factor;
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
-	std::atomic_bool m_workers_alive = false;
 	struct user_pointer{
 		bool active = false;
 		vec2 pos;
@@ -111,6 +113,8 @@ private:
 
 	void user_pointer_force(particle &p);
 
+	void progress();
+
 public:
 	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
 			   const double g_const, const double wall_collision_cor, const double collision_max_force,
@@ -120,7 +124,9 @@ public:
 
 	const std::vector<vec2> &get_particles_positions() const;
 
-	void progress();
+	void start();
+
+	void stop();
 
 	void add(const particle &p);
 
