@@ -292,14 +292,14 @@ const std::vector<vec2> &simulation::get_particles_positions() const
 void simulation::progress()
 {
 	std::unique_lock lock{m_head_workers_mutex};
+	double dt = 0;
+	size_t num = 0;
 	while (m_head_alive)
 	{
-		// const auto t1 = std::chrono::steady_clock::now();
+		const auto t1 = std::chrono::steady_clock::now();
 
 		m_leafs.clear();
 		m_root.find_leafs(m_leafs);
-
-		// const auto t2 = std::chrono::steady_clock::now();
 
 		m_workers_awake = true;
 		lock.unlock();
@@ -307,28 +307,12 @@ void simulation::progress()
 		m_barrier_start.wait();
 		lock.lock();
 
-		// const auto t3 = std::chrono::steady_clock::now();
-
 		m_root.propagate_particles_up(m_temp_particles);
 		m_root.propagate_particles_down();
-
-		// const auto t4 = std::chrono::steady_clock::now();
 
 		m_particles_positions[2].clear();
 		m_particles_positions[2].reserve(m_root.m_num_particles);
 		m_root.get_particles_positions(m_particles_positions[2]);
-
-		// const auto t5 = std::chrono::steady_clock::now();
-
-		// const auto dt1 = (t2 - t1).count();
-		// const auto dt2 = (t3 - t2).count();
-		// const auto dt3 = (t4 - t3).count();
-		// const auto dt4 = (t5 - t4).count();
-
-		// printf("dt1: %lluns\n", dt1);
-		// printf("dt2: %lluns\n", dt2);
-		// printf("dt3: %lluns\n", dt3);
-		// printf("dt4: %lluns\n", dt4);
 
 		{
 			std::lock_guard lock(m_user_access_mutex);
@@ -337,6 +321,17 @@ void simulation::progress()
 			m_swap_buffers = true;
 
 			m_user_pointer = m_user_pointer_tmp;
+		}
+
+		const auto t2 = std::chrono::steady_clock::now();
+		dt += std::chrono::duration<double>(t2-t1).count();
+		++num;
+
+		if(dt > 1)
+		{
+			printf("FPS: %f\n", num / dt);
+			num = 0;
+			dt = 0;
 		}
 	}
 }

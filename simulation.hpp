@@ -82,7 +82,7 @@ private:
 	struct user_pointer{
 		bool active = false;
 		vec2 pos;
-		double size = 10.0;
+		double size = 20.0;
 		double mass = 10000.0;
 		double drag_factor = 0.5;
 	} m_user_pointer, m_user_pointer_tmp;

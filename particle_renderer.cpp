@@ -62,7 +62,7 @@ particle_renderer::particle_renderer(const GladGLContext *gl, const simulation *
 										 "out vec4 FragColor;\n"
 										 "void main()\n"
 										 "{\n"
-										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.2f);\n"
+										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.1f);\n"
 										 "}\n\0";
 
 	const GLuint vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER);
