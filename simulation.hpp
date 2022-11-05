@@ -56,7 +56,7 @@ private:
 	};
 
 	cell m_root;
-    mutable std::mutex m_particles_mutex;
+    mutable std::mutex m_user_access_mutex;
 	static constexpr uint8_t m_particles_buffer_num = 3;
 	mutable std::array<std::vector<vec2>, m_particles_buffer_num> m_particles_positions;
 	mutable bool m_swap_buffers = false;
@@ -77,13 +77,13 @@ private:
 	double m_cell_proximity_factor;
 	std::vector<particle> m_temp_particles;
 	std::atomic_bool alive = true;
-	struct{
+	struct user_pointer{
+		bool active = false;
 		vec2 pos;
 		double size = 10.0;
 		double mass = 10000.0;
-		bool active = false;
 		double drag_factor = 0.5;
-	} m_user_pointer;
+	} m_user_pointer, m_user_pointer_tmp;
 
 	void reset_leafs_iterator();
 
@@ -132,31 +132,37 @@ public:
 
 	void set_pointer_pos(const vec2 &pos)
 	{
-		m_user_pointer.pos = pos;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.pos = pos;
 	}
 
 	void activate_pointer()
 	{
-		m_user_pointer.active = true;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.active = true;
 	}
 
 	void deactivate_pointer()
 	{
-		m_user_pointer.active = false;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.active = false;
 	}
 
 	void set_pointer_mass(const double &mass)
 	{
-		m_user_pointer.mass = mass;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.mass = mass;
 	}
 
 	void set_pointer_size(const double &size)
 	{
-		m_user_pointer.size = size;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.size = size;
 	}
 
 	void set_pointer_drag_factor(const double &drag_factor)
 	{
-		m_user_pointer.drag_factor = drag_factor;
+		std::lock_guard lock(m_user_access_mutex);
+		m_user_pointer_tmp.drag_factor = drag_factor;
 	}
 };

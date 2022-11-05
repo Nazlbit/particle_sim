@@ -264,7 +264,7 @@ inline void simulation::stop_workers()
 
 const std::vector<vec2> &simulation::get_particles_positions() const
 {
-	std::lock_guard lock(m_particles_mutex);
+	std::lock_guard lock(m_user_access_mutex);
 	if(m_swap_buffers)
 	{
 		m_particles_positions[0].swap(m_particles_positions[1]);
@@ -313,9 +313,12 @@ void simulation::progress()
 	// printf("dt4: %lluns\n", dt4);
 
 	{
-		std::lock_guard lock(m_particles_mutex);
+		std::lock_guard lock(m_user_access_mutex);
+
 		m_particles_positions[2].swap(m_particles_positions[1]);
 		m_swap_buffers = true;
+
+		m_user_pointer = m_user_pointer_tmp;
 	}
 }
 
