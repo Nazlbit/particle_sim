@@ -1,86 +1,89 @@
 #pragma once
 #include <cassert>
 
-struct vec2
+struct vec3
 {
-    double x = 0, y = 0;
+    double x = 0, y = 0, z = 0;
 
-	vec2 operator+(const vec2 &b) const
+	vec3 operator+(const vec3 &b) const
 	{
-		return {x + b.x, y + b.y};
+		return {x + b.x, y + b.y, z + b.z};
 	}
 
-	vec2 operator-(const vec2 &b) const
+	vec3 operator-(const vec3 &b) const
 	{
-		return {x - b.x, y - b.y};
+		return {x - b.x, y - b.y, z - b.z};
 	}
 
-	vec2 operator-() const
+	vec3 operator-() const
 	{
-		return {-x, -y};
+		return {-x, -y, -z};
 	}
 
-	double operator*(vec2 b) const
+	double operator*(const vec3 &b) const
 	{
-		return x * b.x + y * b.y;
+		return x * b.x + y * b.y + z * b.z;
 	}
 
-	vec2 operator*(double v) const
+	vec3 operator*(const double &v) const
 	{
-		return {x * v, y * v};
+		return {x * v, y * v, z * v};
 	}
 
-	vec2 operator/(double v) const
+	vec3 operator/(const double &v) const
 	{
-		return {x / v, y / v};
+		return {x / v, y / v, z / v};
 	}
 };
 
-struct vec2_f
+struct vec3_f
 {
-	float x = 0, y = 0;
-	vec2_f() = default;
-	vec2_f(const vec2 &v) : x(v.x), y(v.y){}
+	float x = 0, y = 0, z = 0;
+	vec3_f() = default;
+	vec3_f(const vec3 &v) : x(v.x), y(v.y), z(v.z){}
 
-	vec2_f &operator=(const vec2 &v)
+	vec3_f &operator=(const vec3 &v)
 	{
 		x = v.x;
 		y = v.y;
+		z = v.z;
 		return *this;
 	}
 };
 
 struct rect
 {
-    vec2 bottom_left;
-    vec2 top_right;
+	vec3 left_bottom_near;
+	vec3 right_top_far;
 
-    bool is_inside_ordered(const vec2 &p) const
-    {
-		assert(bottom_left.x < top_right.x);
-		assert(bottom_left.y < top_right.y);
+	bool is_inside_ordered(const vec3 &p) const
+	{
+		assert(left_bottom_near.x < right_top_far.x);
+		assert(left_bottom_near.y < right_top_far.y);
+		assert(left_bottom_near.z < right_top_far.z);
 
-		return bottom_left.x <= p.x && bottom_left.y <= p.y &&
-			   p.x < top_right.x && p.y < top_right.y;
+		return left_bottom_near.x <= p.x && left_bottom_near.y <= p.y && left_bottom_near.z <= p.z &&
+			   p.x < right_top_far.x && p.y < right_top_far.y && p.z < right_top_far.z;
 	}
 
-	bool is_inside_unordered(const vec2 &p) const
+	bool is_inside_unordered(const vec3 &p) const
 	{
-		assert(bottom_left.x < top_right.x);
-		assert(bottom_left.y < top_right.y);
+		assert(left_bottom_near.x < right_top_far.x);
+		assert(left_bottom_near.y < right_top_far.y);
+		assert(left_bottom_near.z < right_top_far.z);
 
-		return bottom_left.x <= p.x && bottom_left.y <= p.y &&
-			   p.x <= top_right.x && p.y <= top_right.y;
+		return left_bottom_near.x <= p.x && left_bottom_near.y <= p.y && left_bottom_near.z <= p.z &&
+			   p.x <= right_top_far.x && p.y <= right_top_far.y && p.z <= right_top_far.z;
 	}
 
-	vec2 center() const
+	vec3 center() const
 	{
-		return (bottom_left + top_right) * 0.5;
+		return (left_bottom_near + right_top_far) * 0.5;
 	}
 
-	vec2 size() const
+	vec3 size() const
 	{
-		return top_right - bottom_left;
+		return right_top_far - left_bottom_near;
 	}
 };
 
