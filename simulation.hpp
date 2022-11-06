@@ -25,7 +25,7 @@ private:
     {
 		const size_t m_particles_limit;
 		cell *const m_parent = nullptr;
-        const rect m_rect;
+        const cube m_cube;
 
         std::vector<particle> m_particles;
         std::vector<cell> m_children;
@@ -34,7 +34,7 @@ private:
         vec3 m_a = {};
 		size_t m_num_particles = 0;
 
-		cell(cell *const parent, const rect r, const size_t particles_limit);
+		cell(cell *const parent, const cube &c, const size_t &particles_limit);
 
 		void subdivide();
 
@@ -116,7 +116,7 @@ private:
 	void progress();
 
 public:
-	simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
+	simulation(const cube &c, const size_t num_threads, const double dt, const double particle_size,
 			   const double g_const, const double wall_collision_cor, const double collision_max_force,
 			   const double drag_factor, const size_t cell_particles_limit, const double cell_proximity_factor);
 
@@ -130,9 +130,9 @@ public:
 
 	void add(const particle &p);
 
-	rect get_sim_rect() const
+	cube get_sim_cube() const
 	{
-		return m_root.m_rect;
+		return m_root.m_cube;
 	}
 
 	size_t get_num_particles() const

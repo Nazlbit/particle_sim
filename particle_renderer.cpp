@@ -137,15 +137,14 @@ void particle_renderer::render()
 	vec3_f *points = static_cast<vec3_f *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
 	const std::vector<vec3> &particles = m_sim->get_particles_positions();
 
-	const rect sim_rect = m_sim->get_sim_rect();
-	const vec3 sim_size = sim_rect.size();
+	const cube sim_cube = m_sim->get_sim_cube();
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
 
 	for (size_t i = 0; i < particles.size(); ++i)
 	{
 		vec3 screen_coords = particles[i];
-		screen_coords.x = screen_coords.x / sim_size.x * 2 / viewport_size.width * viewport_size.height;
-		screen_coords.y = screen_coords.y / sim_size.y * 2;
+		screen_coords.x = screen_coords.x / sim_cube.half_size / viewport_size.width * viewport_size.height;
+		screen_coords.y = screen_coords.y / sim_cube.half_size;
 		screen_coords.z = 0;
 		points[i] = screen_coords;
 	}

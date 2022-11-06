@@ -3,32 +3,25 @@
 
 #include "simulation.hpp"
 
-simulation::cell::cell(cell *const parent, const rect r, const size_t particles_limit) : m_parent(parent), m_rect(r), m_particles_limit(particles_limit)
+simulation::cell::cell(cell *const parent, const cube &c, const size_t &particles_limit) : m_parent(parent), m_cube(c), m_particles_limit(particles_limit)
 {
 	m_particles.reserve(m_particles_limit + 1);
+	m_children.reserve(8);
 }
 
 void simulation::cell::subdivide()
 {
 	assert(m_children.empty());
 
-	const vec3 half_size = m_rect.size() * 0.5;
-	vec3 offset;
-	if (half_size.x > half_size.y && half_size.x > half_size.z)
-	{
-		offset.x = half_size.x;
-	}
-	else if (half_size.y > half_size.z)
-	{
-		offset.y = half_size.y;
-	}
-	else
-	{
-		offset.z = half_size.z;
-	}
-
-	m_children.emplace_back(this, rect{m_rect.left_bottom_near, m_rect.right_top_far - offset}, m_particles_limit);
-	m_children.emplace_back(this, rect{m_rect.left_bottom_near + offset, m_rect.right_top_far}, m_particles_limit);
+	const double half_size = m_cube.half_size * 0.5;
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{-half_size, -half_size, -half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{-half_size, -half_size, half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{-half_size, half_size, -half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{-half_size, half_size, half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{half_size, -half_size, -half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{half_size, -half_size, half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{half_size, half_size, -half_size}, half_size}, m_particles_limit);
+	m_children.emplace_back(this, cube{m_cube.pos + vec3{half_size, half_size, half_size}, half_size}, m_particles_limit);
 
 	m_num_particles = 0;
 	for (const particle &p : m_particles)
@@ -67,22 +60,21 @@ void simulation::cell::add(const particle &p)
 	}
 	else
 	{
-		const vec3 half_size = m_rect.size() * 0.5;
-		double pos;
-		if (half_size.x > half_size.y && half_size.x > half_size.z)
+		uint8_t i = 0;
+		if (p.pos.x > m_cube.pos.x)
 		{
-			pos = p.pos.x - m_rect.left_bottom_near.x - half_size.x;
+			i |= 0b100;
 		}
-		else if (half_size.y > half_size.z)
+		if (p.pos.y > m_cube.pos.y)
 		{
-			pos = p.pos.y - m_rect.left_bottom_near.y - half_size.y;
+			i |= 0b010;
 		}
-		else
+		if (p.pos.z > m_cube.pos.z)
 		{
-			pos = p.pos.z - m_rect.left_bottom_near.z - half_size.z;
+			i |= 0b001;
 		}
 
-		m_children[static_cast<uint8_t>(pos > 0)].add(p);
+		m_children[i].add(p);
 	}
 }
 
@@ -100,7 +92,7 @@ void simulation::cell::propagate_particles_up(std::vector<particle> &temp_partic
 	{
 		for (const particle &p : m_particles)
 		{
-			if (m_rect.is_inside_ordered(p.pos))
+			if (m_cube.is_inside_ordered(p.pos))
 			{
 				temp_particles.push_back(p);
 			}
@@ -208,10 +200,10 @@ void simulation::cell::calculate_center_of_mass()
 	m_center_of_mass = m_center_of_mass / m_num_particles;
 }
 
-simulation::simulation(const rect r, const size_t num_threads, const double dt, const double particle_size,
+simulation::simulation(const cube &c, const size_t num_threads, const double dt, const double particle_size,
                        const double g_const, const double wall_collision_cor, const double collision_max_force,
 					   const double drag_factor, const size_t cell_particles_limit, const double cell_proximity_factor) :
-	m_root(nullptr, r, cell_particles_limit),
+	m_root(nullptr, c, cell_particles_limit),
 	m_workers(num_threads),
 	m_barrier(num_threads, [this] {
 		reset_leafs_iterator();
@@ -441,12 +433,12 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, m_root.m_rect.left_bottom_near, {1, 0, 0});
-				simple_wall(p1, m_root.m_rect.left_bottom_near, {0, 1, 0});
-				simple_wall(p1, m_root.m_rect.left_bottom_near, {0, 0, 1});
-				simple_wall(p1, m_root.m_rect.right_top_far, {-1, 0, 0});
-				simple_wall(p1, m_root.m_rect.right_top_far, {0, -1, 0});
-				simple_wall(p1, m_root.m_rect.right_top_far, {0, 0, -1});
+				simple_wall(p1, {-m_root.m_cube.half_size, 0, 0}, {1, 0, 0});
+				simple_wall(p1, {0, -m_root.m_cube.half_size, 0}, {0, 1, 0});
+				simple_wall(p1, {0, 0, -m_root.m_cube.half_size}, {0, 0, 1});
+				simple_wall(p1, {m_root.m_cube.half_size, 0, 0}, {-1, 0, 0});
+				simple_wall(p1, {0, m_root.m_cube.half_size, 0}, {0, -1, 0});
+				simple_wall(p1, {0, 0, m_root.m_cube.half_size}, {0, 0, -1});
 
 				p1.a = {};
 			}
@@ -533,9 +525,9 @@ inline double simulation::gravitational_force(const double &distance_squared) co
 void simulation::cell_pair_interaction(cell &a, const cell &b)
 {
 	{
-		const vec3 half_size_sum = (a.m_rect.size() + b.m_rect.size()) * (0.5 * m_cell_proximity_factor);
-		const vec3 r = b.m_rect.center() - a.m_rect.center();
-		if (r.x < half_size_sum.x && r.x > -half_size_sum.x && r.y < half_size_sum.y && r.y > -half_size_sum.y && r.z < half_size_sum.z && r.z > -half_size_sum.z)
+		const vec3 r = b.m_cube.pos - a.m_cube.pos;
+		const double size_sum = (a.m_cube.half_size + b.m_cube.half_size) * m_cell_proximity_factor;
+		if (r * r < size_sum * size_sum)
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
