@@ -18,7 +18,7 @@ void application::init()
 	m_wnd.set_mouse_button_callback([this](const int &button, const int &action, const int &mods)
 									{ window_mouse_button_callback(button, action, mods); });
 
-	m_simulation = std::make_unique<simulation>(cube{{0, 0}, sim_size * 0.5}, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
+	m_simulation = std::make_unique<simulation>(sim_size, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
 
 	generate_particles();
 

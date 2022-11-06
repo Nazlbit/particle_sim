@@ -116,9 +116,9 @@ private:
 	void progress();
 
 public:
-	simulation(const cube &c, const size_t num_threads, const double dt, const double particle_size,
-			   const double g_const, const double wall_collision_cor, const double collision_max_force,
-			   const double drag_factor, const size_t cell_particles_limit, const double cell_proximity_factor);
+	simulation(const double &size, const size_t &num_threads, const double &dt, const double &particle_size,
+	           const double &g_const, const double &wall_collision_cor, const double &collision_max_force,
+	           const double &drag_factor, const size_t &cell_particles_limit, const double &cell_proximity_factor);
 
 	~simulation();
 
