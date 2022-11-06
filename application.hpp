@@ -10,7 +10,7 @@ class application
 private:
 	static constexpr double sim_size = 100.;
 	static constexpr double g_const = 0.02;
-	static constexpr double particle_size = 0.5;
+	static constexpr double particle_size = 0.3;
 	static constexpr double dt = 0.01;
 	static constexpr double drag_factor = 0.01;
 	static constexpr double collision_max_force = 0.1;

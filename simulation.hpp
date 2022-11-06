@@ -140,6 +140,11 @@ public:
 		return m_root.m_num_particles;
 	}
 
+	double get_particle_size() const
+	{
+		return m_particle_size;
+	}
+
 	void set_pointer_pos(const vec3 &pos)
 	{
 		std::lock_guard lock(m_user_access_mutex);

@@ -64,7 +64,7 @@ particle_renderer::particle_renderer(const window *const wnd, const simulation *
 										 "out vec4 FragColor;\n"
 										 "void main()\n"
 										 "{\n"
-										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.1f);\n"
+										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.05f);\n"
 										 "}\n\0";
 
 	const GLuint vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER);
@@ -120,12 +120,13 @@ void particle_renderer::configure_pipeline()
 	const auto &gl = m_wnd->gl();
 	gl.BindVertexArray(m_VAO);
 	gl.UseProgram(m_shader_program);
-	gl.PointSize(3);
+
+	const dimensions viewport_size = m_wnd->get_framebuffer_size();
+	const cube sim_cube = m_sim->get_sim_cube();
+	gl.PointSize(m_sim->get_particle_size() / (sim_cube.half_size * 2) * viewport_size.height);
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
-
-	const dimensions viewport_size = m_wnd->get_framebuffer_size();
 	gl.Viewport(0, 0, viewport_size.width, viewport_size.height);
 }
 
