@@ -88,3 +88,8 @@ struct rect
 };
 
 double random_double(double from, double to);
+
+struct dimensions
+{
+	int width = 0, height = 0;
+};

@@ -2,15 +2,10 @@
 #include <functional>
 
 #include "glfw_singleton.hpp"
+#include "math.hpp"
 
 class window
 {
-public:
-	struct dimensions
-	{
-		int width = 0, height = 0;
-	};
-
 private:
 	GLFWwindow *m_wnd = nullptr;
 	GladGLContext m_gl{};
@@ -64,6 +59,13 @@ public:
 	dimensions get_size() const
 	{
 		return m_size;
+	}
+
+	dimensions get_framebuffer_size() const
+	{
+		dimensions framebuffer_size;
+		glfwGetFramebufferSize(m_wnd, &framebuffer_size.width, &framebuffer_size.height);
+		return framebuffer_size;
 	}
 
 	/* Key callback function prototype must be void(const int &key, const int &scancode, const int &action, const int &mods) */

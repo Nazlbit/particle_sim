@@ -1,11 +1,12 @@
 #pragma once
-#include <glad/gl.h>
+#include "window.hpp"
 #include "simulation.hpp"
+#include "math.hpp"
 
 class particle_renderer
 {
 private:
-	const GladGLContext *m_gl = nullptr;
+	const window *m_wnd = nullptr;
 	const simulation *m_sim = nullptr;
 	GLuint m_shader_program = 0;
 	GLuint m_VBO = 0;
@@ -19,7 +20,7 @@ private:
 
 public:
 	particle_renderer() = default;
-	particle_renderer(const GladGLContext *gl, const simulation *sim);
+	particle_renderer(const window *const wnd, const simulation *const sim);
 	particle_renderer(particle_renderer &&other) noexcept;
 	~particle_renderer();
 
