@@ -10,23 +10,25 @@ simulation::cell::cell(cell *const parent, const rect r, const size_t particles_
 
 void simulation::cell::subdivide()
 {
-	static int i = 0;
-	i++;
 	assert(m_children.empty());
 
-	const vec2 size = m_rect.size();
-	if(size.x > size.y)
+	const vec3 half_size = m_rect.size() * 0.5;
+	vec3 offset;
+	if (half_size.x > half_size.y && half_size.x > half_size.z)
 	{
-		const double center = (m_rect.bottom_left.x + m_rect.top_right.x) * 0.5;
-		m_children.emplace_back(this, rect{m_rect.bottom_left, {center, m_rect.top_right.y}}, m_particles_limit);
-		m_children.emplace_back(this, rect{{center, m_rect.bottom_left.y}, m_rect.top_right}, m_particles_limit);
+		offset.x = half_size.x;
+	}
+	else if (half_size.y > half_size.z)
+	{
+		offset.y = half_size.y;
 	}
 	else
 	{
-		const double center = (m_rect.bottom_left.y + m_rect.top_right.y) * 0.5;
-		m_children.emplace_back(this, rect{m_rect.bottom_left, {m_rect.top_right.x, center}}, m_particles_limit);
-		m_children.emplace_back(this, rect{{m_rect.bottom_left.x, center}, m_rect.top_right}, m_particles_limit);
+		offset.z = half_size.z;
 	}
+
+	m_children.emplace_back(this, rect{m_rect.left_bottom_near, m_rect.right_top_far - offset}, m_particles_limit);
+	m_children.emplace_back(this, rect{m_rect.left_bottom_near + offset, m_rect.right_top_far}, m_particles_limit);
 
 	m_num_particles = 0;
 	for (const particle &p : m_particles)
@@ -65,29 +67,22 @@ void simulation::cell::add(const particle &p)
 	}
 	else
 	{
-		const vec2 size = m_rect.size();
-		if (size.x > size.y)
+		const vec3 half_size = m_rect.size() * 0.5;
+		double pos;
+		if (half_size.x > half_size.y && half_size.x > half_size.z)
 		{
-			if (p.pos.x < (m_rect.bottom_left.x + m_rect.top_right.x) * 0.5)
-			{
-				m_children[0].add(p);
-			}
-			else
-			{
-				m_children[1].add(p);
-			}
+			pos = p.pos.x - m_rect.left_bottom_near.x - half_size.x;
+		}
+		else if (half_size.y > half_size.z)
+		{
+			pos = p.pos.y - m_rect.left_bottom_near.y - half_size.y;
 		}
 		else
 		{
-			if (p.pos.y < (m_rect.bottom_left.y + m_rect.top_right.y) * 0.5)
-			{
-				m_children[0].add(p);
-			}
-			else
-			{
-				m_children[1].add(p);
-			}
+			pos = p.pos.z - m_rect.left_bottom_near.z - half_size.z;
 		}
+
+		m_children[static_cast<uint8_t>(pos > 0)].add(p);
 	}
 }
 
@@ -182,7 +177,7 @@ void simulation::cell::get_particles(std::vector<particle> &particles) const
 	}
 }
 
-void simulation::cell::get_particles_positions(std::vector<vec2> &particles) const
+void simulation::cell::get_particles_positions(std::vector<vec3> &particles) const
 {
 	if (!m_children.empty())
 	{
@@ -278,7 +273,7 @@ inline void simulation::stop_workers()
 	m_workers_awake = false;
 }
 
-const std::vector<vec2> &simulation::get_particles_positions() const
+const std::vector<vec3> &simulation::get_particles_positions() const
 {
 	std::lock_guard lock(m_user_access_mutex);
 	if(m_swap_buffers)
@@ -446,10 +441,12 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, m_root.m_rect.bottom_left, {1, 0});
-				simple_wall(p1, m_root.m_rect.bottom_left, {0, 1});
-				simple_wall(p1, m_root.m_rect.top_right, {-1, 0});
-				simple_wall(p1, m_root.m_rect.top_right, {0, -1});
+				simple_wall(p1, m_root.m_rect.left_bottom_near, {1, 0, 0});
+				simple_wall(p1, m_root.m_rect.left_bottom_near, {0, 1, 0});
+				simple_wall(p1, m_root.m_rect.left_bottom_near, {0, 0, 1});
+				simple_wall(p1, m_root.m_rect.right_top_far, {-1, 0, 0});
+				simple_wall(p1, m_root.m_rect.right_top_far, {0, -1, 0});
+				simple_wall(p1, m_root.m_rect.right_top_far, {0, 0, -1});
 
 				p1.a = {};
 			}
@@ -457,9 +454,9 @@ void simulation::calculate_physics()
 	}
 }
 
-void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
+void simulation::simple_wall(particle &p, vec3 wall_pos, vec3 wall_normal)
 {
-	const vec2 r_vec = p.pos - wall_pos;
+	const vec3 r_vec = p.pos - wall_pos;
 	const double distance = r_vec * wall_normal;
 	const double r = m_particle_size * 0.5;
 	if (distance < r) [[unlikely]]
@@ -476,7 +473,7 @@ void simulation::simple_wall(particle &p, vec2 wall_pos, vec2 wall_normal)
 
 void simulation::particle_pair_interaction_local(particle &a, particle &b)
 {
-	const vec2 f = particle_pair_interaction(a, b);
+	const vec3 f = particle_pair_interaction(a, b);
 	a.a = a.a + f;
 	b.a = b.a - f;
 }
@@ -486,9 +483,9 @@ void simulation::particle_pair_interaction_global(particle &a, const particle &b
 	a.a = a.a + particle_pair_interaction(a, b);
 }
 
-vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
+vec3 simulation::particle_pair_interaction(const particle &a, const particle &b)
 {
-	const vec2 ab = b.pos - a.pos;
+	const vec3 ab = b.pos - a.pos;
 	const double distance_squared = ab * ab;
 	if (!std::isnormal(distance_squared)) [[unlikely]]
 	{
@@ -496,7 +493,7 @@ vec2 simulation::particle_pair_interaction(const particle &a, const particle &b)
 	}
 
 	const double distance = sqrt(distance_squared);
-	const vec2 unit_vec = ab / distance;
+	const vec3 unit_vec = ab / distance;
 
 	double f;
 
@@ -536,16 +533,16 @@ inline double simulation::gravitational_force(const double &distance_squared) co
 void simulation::cell_pair_interaction(cell &a, const cell &b)
 {
 	{
-		const vec2 half_size_sum = (a.m_rect.size() + b.m_rect.size()) * (0.5 * m_cell_proximity_factor);
-		const vec2 r = b.m_rect.center() - a.m_rect.center();
-		if (r.x < half_size_sum.x && r.x > -half_size_sum.x && r.y < half_size_sum.y && r.y > -half_size_sum.y)
+		const vec3 half_size_sum = (a.m_rect.size() + b.m_rect.size()) * (0.5 * m_cell_proximity_factor);
+		const vec3 r = b.m_rect.center() - a.m_rect.center();
+		if (r.x < half_size_sum.x && r.x > -half_size_sum.x && r.y < half_size_sum.y && r.y > -half_size_sum.y && r.z < half_size_sum.z && r.z > -half_size_sum.z)
 		{
 			a.m_surrounding_cells.push_back(&b);
 			return;
 		}
 	}
 
-	const vec2 ab = b.m_center_of_mass - a.m_center_of_mass;
+	const vec3 ab = b.m_center_of_mass - a.m_center_of_mass;
 	const double distance_squared = ab * ab;
 	if(!std::isnormal(distance_squared)) [[unlikely]]
 	{
@@ -553,7 +550,7 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 	}
 
 	const double distance = sqrt(distance_squared);
-	const vec2 unit_vec = ab / distance;
+	const vec3 unit_vec = ab / distance;
 
 	const double f = gravitational_force(distance_squared);
 
@@ -562,7 +559,7 @@ void simulation::cell_pair_interaction(cell &a, const cell &b)
 
 void simulation::user_pointer_force(particle &p)
 {
-	const vec2 ab = m_user_pointer.pos - p.pos;
+	const vec3 ab = m_user_pointer.pos - p.pos;
 	const double distance_squared = ab * ab;
 	if (!std::isnormal(distance_squared)) [[unlikely]]
 	{
@@ -570,7 +567,7 @@ void simulation::user_pointer_force(particle &p)
 	}
 
 	const double distance = sqrt(distance_squared);
-	const vec2 unit_vec = ab / distance;
+	const vec3 unit_vec = ab / distance;
 
 	const double radius_sum = (m_particle_size + m_user_pointer.size) * 0.5;
 	if (distance < radius_sum)
@@ -582,7 +579,7 @@ void simulation::user_pointer_force(particle &p)
 		const double q = 1. / (m_user_pointer.mass * mass_force_ratio + gravity_at_collision_point);
 		const double collision_f = 1 - radius_sum_squared * (1 + q) / (distance_squared + radius_sum_squared * q) + gravity_at_collision_point;
 
-		const vec2 drag = -p.v * m_user_pointer.drag_factor;
+		const vec3 drag = -p.v * m_user_pointer.drag_factor;
 
 		p.a = p.a + unit_vec * collision_f + drag;
 	}

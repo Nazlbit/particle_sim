@@ -62,8 +62,8 @@ struct rect
 		assert(left_bottom_near.y < right_top_far.y);
 		assert(left_bottom_near.z < right_top_far.z);
 
-		return left_bottom_near.x <= p.x && left_bottom_near.y <= p.y && left_bottom_near.z <= p.z &&
-			   p.x < right_top_far.x && p.y < right_top_far.y && p.z < right_top_far.z;
+		return left_bottom_near.x < p.x && left_bottom_near.y < p.y && left_bottom_near.z < p.z &&
+			   p.x <= right_top_far.x && p.y <= right_top_far.y && p.z <= right_top_far.z;
 	}
 
 	bool is_inside_unordered(const vec3 &p) const
