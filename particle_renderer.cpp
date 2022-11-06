@@ -122,8 +122,7 @@ void particle_renderer::configure_pipeline()
 	gl.UseProgram(m_shader_program);
 
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
-	const cube sim_cube = m_sim->get_sim_cube();
-	gl.PointSize(m_sim->get_particle_size() / (sim_cube.half_size * 2) * viewport_size.height);
+	gl.PointSize(m_sim->get_particle_size() / m_sim->get_size() * viewport_size.height);
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
@@ -138,14 +137,14 @@ void particle_renderer::render()
 	vec3_f *points = static_cast<vec3_f *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
 	const std::vector<vec3> &particles = m_sim->get_particles_positions();
 
-	const cube sim_cube = m_sim->get_sim_cube();
+	const double sim_half_size = m_sim->get_size() / 2;
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
 
 	for (size_t i = 0; i < particles.size(); ++i)
 	{
 		vec3 screen_coords = particles[i];
-		screen_coords.x = screen_coords.x / sim_cube.half_size / viewport_size.width * viewport_size.height;
-		screen_coords.y = screen_coords.y / sim_cube.half_size;
+		screen_coords.x = screen_coords.x / sim_half_size / viewport_size.width * viewport_size.height;
+		screen_coords.y = screen_coords.y / sim_half_size;
 		screen_coords.z = 0;
 		points[i] = screen_coords;
 	}

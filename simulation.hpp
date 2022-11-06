@@ -130,9 +130,9 @@ public:
 
 	void add(const particle &p);
 
-	cube get_sim_cube() const
+	double get_size() const
 	{
-		return m_root.m_cube;
+		return m_root.m_cube.half_size * 2;
 	}
 
 	size_t get_num_particles() const
