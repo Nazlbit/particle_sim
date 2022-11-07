@@ -51,7 +51,9 @@ struct vec3_f
 	}
 };
 
-double random_double(double from, double to);
+double uniform_random_double(double from, double to);
+
+double normal_random_double(double mean, double stddev);
 
 struct dimensions
 {

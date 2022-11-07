@@ -1,5 +1,6 @@
 #include <thread>
 #include <algorithm>
+#include <cmath>
 
 #include "application.hpp"
 
@@ -30,9 +31,18 @@ void application::generate_particles()
 {
 	for (size_t i = 0; i < num_particles; ++i)
 	{
+		/* Uniform points distribution inside the volume of a sphere:
+		 * https://math.stackexchange.com/questions/87230/picking-random-points-in-the-volume-of-sphere-with-uniform-probability
+		 */
+		const double x = normal_random_double(0, 1);
+		const double y = normal_random_double(0, 1);
+		const double z = normal_random_double(0, 1);
+		const double r = uniform_random_double(0, 1);
+
 		particle p;
-		p.pos = {random_double(-0.5, 0.5), random_double(-0.5, 0.5), random_double(-0.5, 0.5)};
-		p.pos = p.pos * (sim_size * generation_scale);
+		p.pos = {x, y, z};
+		p.pos = p.pos / sqrt(p.pos * p.pos) * pow(r, 1.0 / 3);
+		p.pos = p.pos * (sim_size * 0.5 * generation_scale);
 
 		p.v = vec3{p.pos.y, -p.pos.x, 0} * initial_velocity_factor;
 

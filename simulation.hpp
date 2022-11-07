@@ -105,6 +105,8 @@ private:
 
 	void simple_wall(particle &p, vec3 wall_pos, vec3 wall_normal);
 
+	void spherical_wall(particle &p);
+
 	void calculate_physics();
 
 	double collision_force(const double &distance_squared) const;

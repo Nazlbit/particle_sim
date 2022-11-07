@@ -433,12 +433,7 @@ void simulation::calculate_physics()
 				p1.pos = p1.pos + p1.v * m_dt + p1.a * m_dt * m_dt * 0.5;
 				p1.v = p1.v + p1.a * m_dt;
 
-				simple_wall(p1, {-m_root.m_cube.half_size, 0, 0}, {1, 0, 0});
-				simple_wall(p1, {0, -m_root.m_cube.half_size, 0}, {0, 1, 0});
-				simple_wall(p1, {0, 0, -m_root.m_cube.half_size}, {0, 0, 1});
-				simple_wall(p1, {m_root.m_cube.half_size, 0, 0}, {-1, 0, 0});
-				simple_wall(p1, {0, m_root.m_cube.half_size, 0}, {0, -1, 0});
-				simple_wall(p1, {0, 0, m_root.m_cube.half_size}, {0, 0, -1});
+				spherical_wall(p1);
 
 				p1.a = {};
 			}
@@ -459,6 +454,22 @@ void simulation::simple_wall(particle &p, vec3 wall_pos, vec3 wall_normal)
 		if (projected_v < 0)
 		{
 			p.v = p.v - wall_normal * projected_v * (1.0 + m_wall_collision_cor);
+		}
+	}
+}
+
+void simulation::spherical_wall(particle &p)
+{
+	const double distance = sqrt(p.pos * p.pos);
+	const vec3 normal = -p.pos / distance;
+	const double delta = distance + m_particle_size * 0.5 - m_root.m_cube.half_size;
+	if (delta > 0)
+	{
+		p.pos = p.pos + normal * delta;
+		const double projected_v = p.v * normal;
+		if (projected_v < 0)
+		{
+			p.v = p.v - normal * projected_v * (1.0 + m_wall_collision_cor);
 		}
 	}
 }
