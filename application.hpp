@@ -8,19 +8,20 @@
 class application
 {
 private:
-	static constexpr double sim_size = 70.;
+	static constexpr double sim_size = 100.;
 	static constexpr double g_const = 0.02;
-	static constexpr double particle_size = 0.5;
-	static constexpr double dt = 0.01;
-	static constexpr double drag_factor = 0.01;
-	static constexpr double collision_max_force = 1;
-	static constexpr double initial_velocity_factor = 0.2;
-	static constexpr size_t num_particles = 16000;
+	static constexpr double particle_size = 0.4;
+	static constexpr double dt = 0.005;
+	static constexpr double drag_factor = 0.02;
+	static constexpr double collision_max_force = 3;
+	static constexpr double initial_velocity_factor = 0.05;
+	static constexpr size_t num_particles = 32000;
 	static constexpr size_t cell_particles_limit = 48;
 	static constexpr double wall_collision_cor = 0.0;
-	static constexpr double generation_scale = 0.4;
+	static constexpr double generation_scale = 1.;
 	static constexpr size_t num_threads = 7;
-	static constexpr double cell_proximity_factor = 1.5;
+	static constexpr double cell_proximity_factor = 2.;
+	static constexpr float particle_scale = 1.;
 
 	/* I don't want to make it DefaultConstructible because I'm lazy. */
 	std::unique_ptr<simulation> m_simulation;

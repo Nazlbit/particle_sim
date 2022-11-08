@@ -16,6 +16,7 @@ private:
 	GLint m_projection_uniform = -1;
 	GLint m_particle_size_uniform = -1;
 	mat4<float> m_world_matrix = identity_matrix();
+	float m_particle_scale = 1.f;
 
 	GLuint compile_shader(const char *shader_source, GLenum type);
 	GLuint link_shader_program(const std::vector<GLuint> shaders);
@@ -26,7 +27,7 @@ private:
 
 public:
 	particle_renderer() = default;
-	particle_renderer(const window *const wnd, const simulation *const sim);
+	particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale);
 	particle_renderer(particle_renderer &&other) noexcept;
 	~particle_renderer();
 

@@ -24,7 +24,7 @@ void application::init()
 	generate_particles();
 
 	m_wnd.make_context_current();
-	m_renderer = particle_renderer(&m_wnd, m_simulation.get());
+	m_renderer = particle_renderer(&m_wnd, m_simulation.get(), particle_scale);
 
 	m_cursor.pos = m_wnd.get_cursor_pos();
 }

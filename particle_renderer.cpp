@@ -52,7 +52,7 @@ GLuint particle_renderer::link_shader_program(const std::vector<GLuint> shaders)
 	return program;
 }
 
-particle_renderer::particle_renderer(const window *const wnd, const simulation *const sim) : m_wnd(wnd), m_sim(sim)
+particle_renderer::particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale) : m_wnd(wnd), m_sim(sim), m_particle_scale(particle_scale)
 {
 	const char *vertex_shader_source = "#version 410 core\n"
 									   "layout (location = 0) in vec3 aPos;\n"
@@ -117,6 +117,7 @@ void particle_renderer::move(particle_renderer &&other) noexcept
 	m_projection_uniform = other.m_projection_uniform;
 	m_particle_size_uniform = other.m_particle_size_uniform;
 	m_world_matrix = other.m_world_matrix;
+	m_particle_scale = other.m_particle_scale;
 
 	other.clean();
 }
@@ -173,7 +174,7 @@ void particle_renderer::configure_pipeline()
 	gl.UniformMatrix4fv(m_world_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&m_world_matrix));
 	gl.UniformMatrix4fv(m_view_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&view_matrix));
 	gl.UniformMatrix4fv(m_projection_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&projection_matrix));
-	gl.Uniform1f(m_particle_size_uniform, m_sim->get_particle_size() * viewport_size.height / tanf(fov / 2));
+	gl.Uniform1f(m_particle_size_uniform, m_sim->get_particle_size() * viewport_size.height / tanf(fov / 2) * m_particle_scale);
 }
 
 void particle_renderer::render()
