@@ -15,6 +15,8 @@ private:
 	GLint m_view_uniform = -1;
 	GLint m_projection_uniform = -1;
 	GLint m_particle_size_uniform = -1;
+	mat4<float> m_world_matrix = identity_matrix();
+
 	GLuint compile_shader(const char *shader_source, GLenum type);
 	GLuint link_shader_program(const std::vector<GLuint> shaders);
 
@@ -32,4 +34,6 @@ public:
 
 	void configure_pipeline();
 	void render();
+
+	void rotate_world(const vec2<float> &delta);
 };

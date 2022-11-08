@@ -26,6 +26,12 @@ private:
 	std::unique_ptr<simulation> m_simulation;
 	window m_wnd;
 	particle_renderer m_renderer;
+	struct
+	{
+		vec2<double> pos;
+		bool mlb = false;
+		bool mrb = false;
+	} m_cursor;
 
 	void init();
 	void generate_particles();

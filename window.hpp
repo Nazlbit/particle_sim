@@ -58,7 +58,9 @@ public:
 
 	dimensions get_size() const
 	{
-		return m_size;
+		dimensions size;
+		glfwGetWindowSize(m_wnd, &size.width, &size.height);
+		return size;
 	}
 
 	dimensions get_framebuffer_size() const
@@ -89,5 +91,12 @@ public:
 	void close()
 	{
 		glfwSetWindowShouldClose(m_wnd, GLFW_TRUE);
+	}
+
+	vec2<double> get_cursor_pos() const
+	{
+		vec2<double> pos;
+		glfwGetCursorPos(m_wnd, &pos.x, &pos.y);
+		return pos;
 	}
 };

@@ -25,6 +25,8 @@ void application::init()
 
 	m_wnd.make_context_current();
 	m_renderer = particle_renderer(&m_wnd, m_simulation.get());
+
+	m_cursor.pos = m_wnd.get_cursor_pos();
 }
 
 void application::generate_particles()
@@ -83,8 +85,24 @@ void application::window_key_callback(const int &key, const int &scancode, const
 
 void application::window_cursor_pos_callback(const double &x, const double &y)
 {
+	const vec2<double> new_pos = {x, y};
+
+	if (m_cursor.mlb)
+	{
+		vec2<double> delta = (new_pos - m_cursor.pos) * 0.01;
+
+		m_renderer.rotate_world(vec2<float>::type_cast(delta));
+	}
+
+	m_cursor.pos = new_pos;
 }
 
 void application::window_mouse_button_callback(const int &button, const int &action, const int &mods)
 {
+	switch(button)
+	{
+	case GLFW_MOUSE_BUTTON_LEFT:
+		m_cursor.mlb = (action == GLFW_PRESS);
+		break;
+	};
 }
