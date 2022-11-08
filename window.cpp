@@ -1,6 +1,6 @@
 #include "window.hpp"
 
-window::window(const char *title, const int width, const int height, const bool fullscreen)
+window::window(const char *title, const int &width, const int &height, const bool &fullscreen)
 {
 	// MacOS only supports OpenGL 4.1
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -11,6 +11,7 @@ window::window(const char *title, const int width, const int height, const bool 
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
 	GLFWmonitor *monitor = nullptr;
+	int wnd_width, wnd_height;
 	if (fullscreen)
 	{
 		monitor = glfwGetPrimaryMonitor();
@@ -22,15 +23,15 @@ window::window(const char *title, const int width, const int height, const bool 
 		glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 		glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
 
-		m_size.width = mode->width;
-		m_size.height = mode->height;
+		wnd_width = mode->width;
+		wnd_height = mode->height;
 	}
 	else
 	{
-		m_size.width = width;
-		m_size.height = height;
+		wnd_width = width;
+		wnd_height = height;
 	}
-	m_wnd = glfwCreateWindow(m_size.width, m_size.height, title, monitor, nullptr);
+	m_wnd = glfwCreateWindow(wnd_width, wnd_height, title, monitor, nullptr);
 	ASSERT_EX_M(m_wnd, "Failed to create a window");
 
 	glfwMakeContextCurrent(m_wnd);
@@ -52,7 +53,6 @@ void window::move(window &&other)
 {
 	m_gl = other.m_gl;
 	m_wnd = other.m_wnd;
-	m_size = other.m_size;
 	other.m_wnd = nullptr;
 	m_key_callback = std::move(other.m_key_callback);
 	m_cursor_pos_callback = std::move(other.m_cursor_pos_callback);

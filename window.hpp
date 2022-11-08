@@ -9,7 +9,6 @@ class window
 private:
 	GLFWwindow *m_wnd = nullptr;
 	GladGLContext m_gl{};
-	dimensions m_size;
 	std::function<void(const int&, const int&, const int&, const int&)> m_key_callback;
 	std::function<void(const double &, const double &)> m_cursor_pos_callback;
 	std::function<void(const int &, const int &, const int &)> m_mouse_button_callback;
@@ -23,7 +22,7 @@ private:
 public:
 	window() = default;
 
-	window(const char *title, const int width, const int height, const bool fullscreen);
+	window(const char *title, const int &width, const int &height, const bool &fullscreen);
 
 	window(window &&other);
 

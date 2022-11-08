@@ -17,7 +17,7 @@ private:
 	static constexpr double initial_velocity_factor = 0.2;
 	static constexpr size_t num_particles = 16000;
 	static constexpr size_t cell_particles_limit = 48;
-	static constexpr double wall_collision_cor = 0.5;
+	static constexpr double wall_collision_cor = 0.0;
 	static constexpr double generation_scale = 0.4;
 	static constexpr size_t num_threads = 7;
 	static constexpr double cell_proximity_factor = 1.5;
