@@ -56,15 +56,21 @@ particle_renderer::particle_renderer(const window *const wnd, const simulation *
 {
 	const char *vertex_shader_source = "#version 410 core\n"
 									   "layout (location = 0) in vec3 aPos;\n"
+									   "uniform mat4 World;\n"
+									   "uniform mat4 View;\n"
+									   "uniform mat4 Projection;\n"
+									   "uniform float ParticleSize;\n"
 									   "void main()\n"
 									   "{\n"
-									   "   gl_Position = vec4(aPos, 1.0);\n"
+									   "   vec4 pos = Projection * View * World * vec4(aPos, 1.0);\n"
+									   "   gl_Position = pos;\n"
+									   "   gl_PointSize = ParticleSize / pos.w;\n"
 									   "}\0";
 	const char *fragment_shader_source = "#version 410 core\n"
 										 "out vec4 FragColor;\n"
 										 "void main()\n"
 										 "{\n"
-										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.05f);\n"
+										 "   FragColor = vec4(1.0f, 1.0f, 1.0f, 0.025f);\n"
 										 "}\n\0";
 
 	const GLuint vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER);
@@ -83,29 +89,59 @@ particle_renderer::particle_renderer(const window *const wnd, const simulation *
 	gl.BindVertexArray(m_VAO);
 
 	gl.BindBuffer(GL_ARRAY_BUFFER, m_VBO);
-	gl.BufferData(GL_ARRAY_BUFFER, sizeof(vec3_f) * m_sim->get_num_particles(), nullptr, GL_DYNAMIC_DRAW);
+	gl.BufferData(GL_ARRAY_BUFFER, sizeof(vec3<float>) * m_sim->get_num_particles(), nullptr, GL_DYNAMIC_DRAW);
 
-	gl.VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3_f), (void *)0);
+	gl.VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3<float>), (void *)0);
 	gl.EnableVertexAttribArray(0);
+
+	m_world_uniform = gl.GetUniformLocation(m_shader_program, "World");
+	m_view_uniform = gl.GetUniformLocation(m_shader_program, "View");
+	m_projection_uniform = gl.GetUniformLocation(m_shader_program, "Projection");
+	m_particle_size_uniform = gl.GetUniformLocation(m_shader_program, "ParticleSize");
 }
 
-particle_renderer::particle_renderer(particle_renderer &&other) noexcept
-	: m_wnd(other.m_wnd), m_sim(other.m_sim), m_shader_program(other.m_shader_program), m_VBO(other.m_VBO), m_VAO(other.m_VAO)
+void particle_renderer::clean() noexcept
 {
-	other.clean();
+	m_wnd = nullptr;
 }
 
-particle_renderer &particle_renderer::operator=(particle_renderer &&other) noexcept
+void particle_renderer::move(particle_renderer &&other) noexcept
 {
-	safe_destroy();
-
 	m_wnd = other.m_wnd;
 	m_sim = other.m_sim;
 	m_shader_program = other.m_shader_program;
 	m_VBO = other.m_VBO;
 	m_VAO = other.m_VAO;
+	m_world_uniform = other.m_world_uniform;
+	m_view_uniform = other.m_view_uniform;
+	m_projection_uniform = other.m_projection_uniform;
+	m_particle_size_uniform = other.m_particle_size_uniform;
 
 	other.clean();
+}
+
+void particle_renderer::safe_destroy() noexcept
+{
+	if (m_wnd)
+	{
+		const auto &gl = m_wnd->gl();
+		gl.DeleteVertexArrays(1, &m_VAO);
+		gl.DeleteBuffers(1, &m_VBO);
+		gl.DeleteProgram(m_shader_program);
+	}
+
+	clean();
+}
+
+particle_renderer::particle_renderer(particle_renderer &&other) noexcept
+{
+	move(std::move(other));
+}
+
+particle_renderer &particle_renderer::operator=(particle_renderer &&other) noexcept
+{
+	safe_destroy();
+	move(std::move(other));
 
 	return *this;
 }
@@ -122,11 +158,22 @@ void particle_renderer::configure_pipeline()
 	gl.UseProgram(m_shader_program);
 
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
-	gl.PointSize(m_sim->get_particle_size() / m_sim->get_size() * viewport_size.height);
+	const double sim_size = m_sim->get_size();
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
+	gl.Enable(GL_PROGRAM_POINT_SIZE);
 	gl.Viewport(0, 0, viewport_size.width, viewport_size.height);
+
+	const mat4<float> world_matrix = identity_matrix();
+	const float fov = degrees_to_radians<float>(70);
+	const float distance = sim_size * 0.5f / sinf(fov * 0.5);
+	const mat4<float> view_matrix = look_to_matrix({0, 0, -distance}, {0, 0, 1}, {0, 1, 0});
+	const mat4<float> projection_matrix = perspective_projection_matrix(fov, (distance - sim_size* 0.5) * 0.9, (distance +sim_size * 0.5) * 1.1, (float)viewport_size.width / viewport_size.height);
+	gl.UniformMatrix4fv(m_world_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&world_matrix));
+	gl.UniformMatrix4fv(m_view_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&view_matrix));
+	gl.UniformMatrix4fv(m_projection_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&projection_matrix));
+	gl.Uniform1f(m_particle_size_uniform, m_sim->get_particle_size() * viewport_size.height / tanf(fov / 2));
 }
 
 void particle_renderer::render()
@@ -134,43 +181,17 @@ void particle_renderer::render()
 	const auto &gl = m_wnd->gl();
 	gl.Clear(GL_COLOR_BUFFER_BIT);
 
-	vec3_f *points = static_cast<vec3_f *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
-	const std::vector<vec3> &particles = m_sim->get_particles_positions();
+	vec3<float> *points = static_cast<vec3<float> *>(gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY));
+	const std::vector<vec3<double>> &particles = m_sim->get_particles_positions();
 
 	const double sim_half_size = m_sim->get_size() / 2;
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
 
 	for (size_t i = 0; i < particles.size(); ++i)
 	{
-		vec3 screen_coords = particles[i];
-		screen_coords.x = screen_coords.x / sim_half_size / viewport_size.width * viewport_size.height;
-		screen_coords.y = screen_coords.y / sim_half_size;
-		screen_coords.z = 0;
-		points[i] = screen_coords;
+		points[i] = vec3<float>::type_cast(particles[i]);
 	}
 	gl.UnmapBuffer(GL_ARRAY_BUFFER);
 
 	gl.DrawArrays(GL_POINTS, 0, particles.size());
-}
-
-void particle_renderer::safe_destroy() noexcept
-{
-	if(m_wnd)
-	{
-		const auto &gl = m_wnd->gl();
-		gl.DeleteVertexArrays(1, &m_VAO);
-		gl.DeleteBuffers(1, &m_VBO);
-		gl.DeleteProgram(m_shader_program);
-	}
-
-	clean();
-}
-
-void particle_renderer::clean() noexcept
-{
-	m_wnd = nullptr;
-	m_sim = nullptr;
-	m_shader_program = 0;
-	m_VBO = 0;
-	m_VAO = 0;
 }

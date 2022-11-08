@@ -44,7 +44,7 @@ void application::generate_particles()
 		p.pos = p.pos / sqrt(p.pos * p.pos) * pow(r, 1.0 / 3);
 		p.pos = p.pos * (sim_size * 0.5 * generation_scale);
 
-		p.v = vec3{p.pos.y, -p.pos.x, 0} * initial_velocity_factor;
+		p.v = vec3<double>{p.pos.y, -p.pos.x, 0} * initial_velocity_factor;
 
 		m_simulation->add(p);
 	}

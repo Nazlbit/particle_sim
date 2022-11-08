@@ -11,12 +11,16 @@ private:
 	GLuint m_shader_program = 0;
 	GLuint m_VBO = 0;
 	GLuint m_VAO = 0;
-
+	GLint m_world_uniform = -1;
+	GLint m_view_uniform = -1;
+	GLint m_projection_uniform = -1;
+	GLint m_particle_size_uniform = -1;
 	GLuint compile_shader(const char *shader_source, GLenum type);
 	GLuint link_shader_program(const std::vector<GLuint> shaders);
 
 	void safe_destroy() noexcept;
 	void clean() noexcept;
+	void move(particle_renderer&& other) noexcept;
 
 public:
 	particle_renderer() = default;

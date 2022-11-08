@@ -13,9 +13,9 @@
 
 struct particle
 {
-    vec3 pos;
-    vec3 v;
-    vec3 a;
+    vec3<double> pos;
+    vec3<double> v;
+    vec3<double> a;
 };
 
 class simulation
@@ -25,16 +25,16 @@ private:
     {
 		const size_t m_particles_limit;
 		cell *const m_parent = nullptr;
-        const cube m_cube;
+        const cube<double> m_cube;
 
         std::vector<particle> m_particles;
         std::vector<cell> m_children;
 		std::vector<const cell *> m_surrounding_cells;
-		vec3 m_center_of_mass = {};
-        vec3 m_a = {};
+		vec3<double> m_center_of_mass = {};
+        vec3<double> m_a = {};
 		size_t m_num_particles = 0;
 
-		cell(cell *const parent, const cube &c, const size_t &particles_limit);
+		cell(cell *const parent, const cube<double> &c, const size_t &particles_limit);
 
 		void subdivide();
 
@@ -50,7 +50,7 @@ private:
 
 		void get_particles(std::vector<particle> &particles) const;
 
-		void get_particles_positions(std::vector<vec3> &particles) const;
+		void get_particles_positions(std::vector<vec3<double>> &particles) const;
 
 		void calculate_center_of_mass();
 	};
@@ -58,7 +58,7 @@ private:
 	cell m_root;
     mutable std::mutex m_user_access_mutex;
 	static constexpr uint8_t m_particles_buffer_num = 3;
-	mutable std::array<std::vector<vec3>, m_particles_buffer_num> m_particles_positions;
+	mutable std::array<std::vector<vec3<double>>, m_particles_buffer_num> m_particles_positions;
 	mutable bool m_swap_buffers = false;
     std::vector<cell *> m_leafs;
 	std::thread m_head;
@@ -81,7 +81,7 @@ private:
 	std::vector<particle> m_temp_particles;
 	struct user_pointer{
 		bool active = false;
-		vec3 pos;
+		vec3<double> pos;
 		double size = 20.0;
 		double mass = 10000.0;
 		double drag_factor = 0.5;
@@ -97,13 +97,13 @@ private:
 
 	void cell_pair_interaction(cell &a, const cell &b);
 
-	vec3 particle_pair_interaction(const particle &a, const particle &b);
+	vec3<double> particle_pair_interaction(const particle &a, const particle &b);
 
 	void particle_pair_interaction_local(particle &a, particle &b);
 
 	void particle_pair_interaction_global(particle &a, const particle &b);
 
-	void simple_wall(particle &p, vec3 wall_pos, vec3 wall_normal);
+	void simple_wall(particle &p, vec3<double> wall_pos, vec3<double> wall_normal);
 
 	void spherical_wall(particle &p);
 
@@ -124,7 +124,7 @@ public:
 
 	~simulation();
 
-	const std::vector<vec3> &get_particles_positions() const;
+	const std::vector<vec3<double>> &get_particles_positions() const;
 
 	void start();
 
@@ -147,7 +147,7 @@ public:
 		return m_particle_size;
 	}
 
-	void set_pointer_pos(const vec3 &pos)
+	void set_pointer_pos(const vec3<double> &pos)
 	{
 		std::lock_guard lock(m_user_access_mutex);
 		m_user_pointer_tmp.pos = pos;
