@@ -12,10 +12,12 @@ private:
 	std::function<void(const int&, const int&, const int&, const int&)> m_key_callback;
 	std::function<void(const double &, const double &)> m_cursor_pos_callback;
 	std::function<void(const int &, const int &, const int &)> m_mouse_button_callback;
+	std::function<void(const double &, const double &)> m_scroll_callback;
 
 	static void key_callback_static(GLFWwindow *wnd, int key, int scancode, int action, int mods);
 	static void cursor_pos_callback_static(GLFWwindow *wnd, double x, double y);
 	static void mouse_button_callback_static(GLFWwindow *wnd, int button, int action, int mods);
+	static void scroll_callback_static(GLFWwindow *wnd, double xoffset, double yoffset);
 
 	void move(window &&other);
 
@@ -85,6 +87,12 @@ public:
 	void set_mouse_button_callback(std::function<void(const int &, const int &, const int &)> mouse_button_callback)
 	{
 		m_mouse_button_callback = std::move(mouse_button_callback);
+	}
+
+	/* Key callback function prototype must be void(const int &, const int &, const int &) */
+	void set_scroll_callback(std::function<void(const double &, const double &)> scroll_callback)
+	{
+		m_scroll_callback = std::move(scroll_callback);
 	}
 
 	void close()

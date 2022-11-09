@@ -52,7 +52,7 @@ GLuint particle_renderer::link_shader_program(const std::vector<GLuint> shaders)
 	return program;
 }
 
-particle_renderer::particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale) : m_wnd(wnd), m_sim(sim), m_particle_scale(particle_scale)
+particle_renderer::particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale, const float &fov) : m_wnd(wnd), m_sim(sim), m_particle_scale(particle_scale), m_fov(fov)
 {
 	const char *vertex_shader_source = "#version 410 core\n"
 									   "layout (location = 0) in vec3 aPos;\n"
@@ -118,6 +118,8 @@ void particle_renderer::move(particle_renderer &&other) noexcept
 	m_particle_size_uniform = other.m_particle_size_uniform;
 	m_world_matrix = other.m_world_matrix;
 	m_particle_scale = other.m_particle_scale;
+	m_fov = other.m_fov;
+	m_camera_zoom = other.m_camera_zoom;
 
 	other.clean();
 }
@@ -160,21 +162,21 @@ void particle_renderer::configure_pipeline()
 	gl.UseProgram(m_shader_program);
 
 	const dimensions viewport_size = m_wnd->get_framebuffer_size();
-	const double sim_size = m_sim->get_size();
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	gl.Enable(GL_MULTISAMPLE);
 	gl.Enable(GL_PROGRAM_POINT_SIZE);
 	gl.Viewport(0, 0, viewport_size.width, viewport_size.height);
 
-	const float fov = degrees_to_radians<float>(70);
-	const float distance = sim_size * 0.5f / sinf(fov * 0.5);
+	const double sim_size = m_sim->get_size();
+	const float distance = sim_size * 0.5f / sinf(m_fov * 0.5) * m_camera_zoom;
 	const mat4<float> view_matrix = look_to_matrix({0, 0, -distance}, {0, 0, 1}, {0, 1, 0});
-	const mat4<float> projection_matrix = perspective_projection_matrix(fov, (distance - sim_size* 0.5) * 0.9, (distance +sim_size * 0.5) * 1.1, (float)viewport_size.width / viewport_size.height);
+
+	const mat4<float> projection_matrix = perspective_projection_matrix(m_fov, std::max((distance - sim_size * 0.5) * 0.9, 0.1), (distance + sim_size * 0.5) * 1.1, (float)viewport_size.width / viewport_size.height);
 	gl.UniformMatrix4fv(m_world_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&m_world_matrix));
 	gl.UniformMatrix4fv(m_view_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&view_matrix));
 	gl.UniformMatrix4fv(m_projection_uniform, 1, GL_TRUE, reinterpret_cast<const GLfloat *>(&projection_matrix));
-	gl.Uniform1f(m_particle_size_uniform, m_sim->get_particle_size() * viewport_size.height / tanf(fov / 2) * m_particle_scale);
+	gl.Uniform1f(m_particle_size_uniform, m_sim->get_particle_size() * viewport_size.height / tanf(m_fov / 2) * m_particle_scale);
 }
 
 void particle_renderer::render()

@@ -16,7 +16,9 @@ private:
 	GLint m_projection_uniform = -1;
 	GLint m_particle_size_uniform = -1;
 	mat4<float> m_world_matrix = identity_matrix();
-	float m_particle_scale = 1.f;
+	float m_particle_scale;
+	float m_fov;
+	float m_camera_zoom = 1.;
 
 	GLuint compile_shader(const char *shader_source, GLenum type);
 	GLuint link_shader_program(const std::vector<GLuint> shaders);
@@ -27,7 +29,7 @@ private:
 
 public:
 	particle_renderer() = default;
-	particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale);
+	particle_renderer(const window *const wnd, const simulation *const sim, const float &particle_scale, const float &fov);
 	particle_renderer(particle_renderer &&other) noexcept;
 	~particle_renderer();
 
@@ -37,4 +39,19 @@ public:
 	void render();
 
 	void rotate_world(const vec2<float> &delta);
+
+	void set_particle_scale(const float &scale)
+	{
+		m_particle_scale = scale;
+	}
+
+	void set_zoom(const float &zoom)
+	{
+		m_camera_zoom = zoom;
+	}
+
+	float get_zoom() const
+	{
+		return m_camera_zoom;
+	}
 };

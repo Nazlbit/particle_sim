@@ -19,12 +19,15 @@ void application::init()
 	m_wnd.set_mouse_button_callback([this](const int &button, const int &action, const int &mods)
 									{ window_mouse_button_callback(button, action, mods); });
 
+	m_wnd.set_scroll_callback([this](const double &xoffset, const double &yoffset)
+							  { window_scroll_callback(xoffset, yoffset); });
+
 	m_simulation = std::make_unique<simulation>(sim_size, num_threads, dt, particle_size, g_const, wall_collision_cor, collision_max_force, drag_factor, cell_particles_limit, cell_proximity_factor);
 
 	generate_particles();
 
 	m_wnd.make_context_current();
-	m_renderer = particle_renderer(&m_wnd, m_simulation.get(), particle_scale);
+	m_renderer = particle_renderer(&m_wnd, m_simulation.get(), particle_scale, degrees_to_radians(fov));
 
 	m_cursor.pos = m_wnd.get_cursor_pos();
 }
@@ -105,4 +108,9 @@ void application::window_mouse_button_callback(const int &button, const int &act
 		m_cursor.mlb = (action == GLFW_PRESS);
 		break;
 	};
+}
+
+void application::window_scroll_callback(const double &xoffset, const double &yoffset)
+{
+	m_renderer.set_zoom(m_renderer.get_zoom() * powf(0.99, yoffset));
 }
