@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
 #include <cmath>
+#include <numbers>
 
 template<typename T>
 struct vec2
@@ -149,7 +150,7 @@ struct mat4
 template<typename T>
 inline T degrees_to_radians(const T &degrees)
 {
-	return degrees / 180 * M_PI;
+	return degrees / 180 * std::numbers::pi_v<T>;
 }
 
 inline mat4<float> perspective_projection_matrix(const float &fov, const float &near_plane, const float &far_plane, const float &aspect_ratio)

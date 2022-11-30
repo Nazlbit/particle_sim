@@ -1,10 +1,4 @@
-#include <thread>
-#include <algorithm>
-#include <cmath>
-
 #include "application.hpp"
-
-using namespace std::chrono_literals;
 
 void application::init()
 {
